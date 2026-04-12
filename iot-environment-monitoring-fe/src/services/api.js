@@ -15,15 +15,10 @@ const api = axios.create({
 });
 
 /**
- * Request interceptor - thêm token, log request
+ * Request interceptor
  */
 api.interceptors.request.use(
   (config) => {
-    // Get token từ localStorage nếu có
-    const token = localStorage.getItem("authToken");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {
@@ -39,13 +34,6 @@ api.interceptors.response.use(
     return response.data; // Trả về data trực tiếp thay vì response envelope
   },
   (error) => {
-    // Handle 401 Unauthorized - redirect to login
-    if (error.response?.status === 401) {
-      localStorage.removeItem("authToken");
-      window.location.href = "/login"; // Khi có auth page
-    }
-
-    // Handle other errors
     const errorMessage =
       error.response?.data?.message || error.message || "Unknown error";
 

@@ -1,113 +1,120 @@
-const { Device, ActionHistory } = require("../models");
+const Device = require("../models/Device");
+const AppError = require("../utils/appError");
+const { Op } = require("sequelize");
+const sequelize = require("../config/database");
 
-const listDevices = async (req, res, next) => {
-  try {
-    const devices = await Device.findAll({
-      order: [["id", "ASC"]],
-      include: [
-        {
-          model: ActionHistory,
-          as: "actionLogs",
-          separate: true,
-          limit: 20,
-          order: [["id", "DESC"]],
-        },
-      ],
-    });
-
-    res.status(200).json({ success: true, data: devices });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const getDeviceById = async (req, res, next) => {
-  try {
-    const device = await Device.findByPk(req.params.id, {
-      include: [
-        {
-          model: ActionHistory,
-          as: "actionLogs",
-          separate: true,
-          limit: 50,
-          order: [["id", "DESC"]],
-        },
-      ],
-    });
-
-    if (!device) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Device not found" });
-    }
-
-    res.status(200).json({ success: true, data: device });
-  } catch (error) {
-    next(error);
-  }
-};
-
+// ===== CREATE DEVICE =====
 const createDevice = async (req, res, next) => {
   try {
     const { name } = req.body;
-    if (!name || typeof name !== "string") {
-      return res
-        .status(400)
-        .json({ success: false, message: "name is required" });
+
+    if (!name) {
+      throw new AppError(400, "Device name is required");
     }
 
-    const device = await Device.create({ name: name.trim() });
-    res.status(201).json({ success: true, data: device });
-  } catch (error) {
-    next(error);
+    const device = await Device.create({ name });
+
+    return res.status(201).json({
+      success: true,
+      data: device,
+      message: "Device created successfully",
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
+// ===== GET ALL DEVICES =====
+const getAllDevices = async (req, res, next) => {
+  try {
+    const devices = await Device.findAll();
+
+    return res.status(200).json({
+      success: true,
+      data: devices,
+      message: "Devices retrieved successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===== GET DEVICE BY ID =====
+const getDeviceById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const device = await Device.findByPk(id);
+
+    if (!device) {
+      throw new AppError(404, "Device not found");
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: device,
+      message: "Device retrieved successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===== UPDATE DEVICE =====
 const updateDevice = async (req, res, next) => {
   try {
-    const device = await Device.findByPk(req.params.id);
-    if (!device) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Device not found" });
-    }
-
+    const { id } = req.params;
     const { name } = req.body;
-    if (!name || typeof name !== "string") {
-      return res
-        .status(400)
-        .json({ success: false, message: "name is required" });
+
+    if (!name) {
+      throw new AppError(400, "Device name is required");
     }
 
-    device.name = name.trim();
-    await device.save();
+    const device = await Device.findByPk(id);
 
-    res.status(200).json({ success: true, data: device });
-  } catch (error) {
-    next(error);
+    if (!device) {
+      throw new AppError(404, "Device not found");
+    }
+
+    await device.update({ name });
+
+    return res.status(200).json({
+      success: true,
+      data: device,
+      message: "Device updated successfully",
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
+// ===== DELETE DEVICE =====
 const deleteDevice = async (req, res, next) => {
   try {
-    const device = await Device.findByPk(req.params.id);
+    const { id } = req.params;
+
+    const device = await Device.findByPk(id);
+
     if (!device) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Device not found" });
+      throw new AppError(404, "Device not found");
     }
 
     await device.destroy();
-    res.status(200).json({ success: true, message: "Device deleted" });
-  } catch (error) {
-    next(error);
+
+    return res.status(200).json({
+      success: true,
+      data: null,
+      message: "Device deleted",
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
 module.exports = {
-  listDevices,
-  getDeviceById,
   createDevice,
+  getAllDevices,
+  getDeviceById,
   updateDevice,
   deleteDevice,
 };

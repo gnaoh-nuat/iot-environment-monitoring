@@ -1,169 +1,133 @@
-const { Sensor, SensorData } = require("../models");
+const Sensor = require("../models/Sensor");
+const AppError = require("../utils/appError");
+const { Op } = require("sequelize");
+const sequelize = require("../config/database");
 
-const listSensors = async (req, res, next) => {
-  try {
-    const sensors = await Sensor.findAll({
-      order: [["id", "ASC"]],
-      include: [
-        {
-          model: SensorData,
-          as: "dataLogs",
-          separate: true,
-          limit: 20,
-          order: [["id", "DESC"]],
-        },
-      ],
-    });
-
-    res.status(200).json({ success: true, data: sensors });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const getSensorById = async (req, res, next) => {
-  try {
-    const sensor = await Sensor.findByPk(req.params.id, {
-      include: [
-        {
-          model: SensorData,
-          as: "dataLogs",
-          separate: true,
-          limit: 50,
-          order: [["id", "DESC"]],
-        },
-      ],
-    });
-
-    if (!sensor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Sensor not found" });
-    }
-
-    res.status(200).json({ success: true, data: sensor });
-  } catch (error) {
-    next(error);
-  }
-};
-
+// ===== CREATE SENSOR =====
 const createSensor = async (req, res, next) => {
   try {
     const { name } = req.body;
 
-    if (!name || typeof name !== "string") {
-      return res
-        .status(400)
-        .json({ success: false, message: "name is required" });
+    if (!name) {
+      throw new AppError(400, "Sensor name is required");
     }
 
-    const sensor = await Sensor.create({ name: name.trim() });
-    res.status(201).json({ success: true, data: sensor });
-  } catch (error) {
-    next(error);
+    const existed = await Sensor.findOne({ where: { name } });
+    if (existed) {
+      throw new AppError(400, "Sensor already exists");
+    }
+
+    const sensor = await Sensor.create({ name });
+
+    return res.status(201).json({
+      success: true,
+      data: sensor,
+      message: "Sensor created successfully",
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
+// ===== GET ALL SENSOR =====
+const getAllSensors = async (req, res, next) => {
+  try {
+    const sensors = await Sensor.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: sensors,
+      message: "Sensors retrieved successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===== GET SENSOR BY ID =====
+const getSensorById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const sensor = await Sensor.findByPk(id);
+
+    if (!sensor) {
+      throw new AppError(404, "Sensor not found");
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: sensor,
+      message: "Sensor retrieved successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===== UPDATE SENSOR =====
 const updateSensor = async (req, res, next) => {
   try {
-    const sensor = await Sensor.findByPk(req.params.id);
-    if (!sensor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Sensor not found" });
-    }
-
+    const { id } = req.params;
     const { name } = req.body;
-    if (!name || typeof name !== "string") {
-      return res
-        .status(400)
-        .json({ success: false, message: "name is required" });
+
+    const sensor = await Sensor.findByPk(id);
+
+    if (!sensor) {
+      throw new AppError(404, "Sensor not found");
     }
 
-    sensor.name = name.trim();
-    await sensor.save();
+    if (!name) {
+      throw new AppError(400, "Sensor name is required");
+    }
 
-    res.status(200).json({ success: true, data: sensor });
-  } catch (error) {
-    next(error);
+    // check duplicate
+    const existed = await Sensor.findOne({ where: { name } });
+    if (existed && existed.id !== sensor.id) {
+      throw new AppError(400, "Sensor name already exists");
+    }
+
+    await sensor.update({ name });
+
+    return res.status(200).json({
+      success: true,
+      data: sensor,
+      message: "Sensor updated successfully",
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
+// ===== DELETE SENSOR =====
 const deleteSensor = async (req, res, next) => {
   try {
-    const sensor = await Sensor.findByPk(req.params.id);
+    const { id } = req.params;
+
+    const sensor = await Sensor.findByPk(id);
+
     if (!sensor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Sensor not found" });
+      throw new AppError(404, "Sensor not found");
     }
 
     await sensor.destroy();
-    res.status(200).json({ success: true, message: "Sensor deleted" });
-  } catch (error) {
-    next(error);
-  }
-};
 
-const listSensorDataBySensor = async (req, res, next) => {
-  try {
-    const sensor = await Sensor.findByPk(req.params.id);
-    if (!sensor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Sensor not found" });
-    }
-
-    const logs = await SensorData.findAll({
-      where: { sensor_id: req.params.id },
-      order: [["id", "DESC"]],
+    return res.status(200).json({
+      success: true,
+      data: null,
+      message: "Sensor deleted successfully",
     });
-
-    res.status(200).json({ success: true, data: logs });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const createSensorData = async (req, res, next) => {
-  try {
-    const sensor = await Sensor.findByPk(req.params.id);
-    if (!sensor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Sensor not found" });
-    }
-
-    const { value, date_time } = req.body;
-    if (typeof value !== "number") {
-      return res
-        .status(400)
-        .json({ success: false, message: "value must be a number" });
-    }
-
-    const payload = { sensor_id: sensor.id, value };
-    if (date_time) {
-      payload.date_time = new Date(date_time);
-      if (Number.isNaN(payload.date_time.getTime())) {
-        return res
-          .status(400)
-          .json({ success: false, message: "date_time is invalid" });
-      }
-    }
-
-    const log = await SensorData.create(payload);
-    res.status(201).json({ success: true, data: log });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 module.exports = {
-  listSensors,
-  getSensorById,
   createSensor,
+  getAllSensors,
+  getSensorById,
   updateSensor,
   deleteSensor,
-  listSensorDataBySensor,
-  createSensorData,
 };

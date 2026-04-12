@@ -1,31 +1,39 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../config/db");
+const sequelize = require("../config/database");
 
-const SensorData = sequelize.define(
-  "SensorData",
+const DataSensor = sequelize.define(
+  "DataSensor",
   {
     id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
+      type: DataTypes.BIGINT,
       autoIncrement: true,
+      primaryKey: true,
     },
-    sensor_id: {
-      type: DataTypes.INTEGER,
+    sensorId: {
+      type: DataTypes.BIGINT,
       allowNull: false,
+      field: "sensor_id",
     },
     value: {
-      type: DataTypes.FLOAT,
+      type: DataTypes.STRING,
       allowNull: false,
-    },
-    date_time: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
     },
   },
   {
-    tableName: "sensor_data",
-    timestamps: false,
+    tableName: "SensorData",
+    timestamps: true,
+    indexes: [
+      {
+        fields: ["sensor_id"],
+      },
+      {
+        fields: ["createdAt"],
+      },
+      {
+        fields: ["sensor_id", "createdAt"],
+      },
+    ],
   },
 );
 
-module.exports = SensorData;
+module.exports = DataSensor;

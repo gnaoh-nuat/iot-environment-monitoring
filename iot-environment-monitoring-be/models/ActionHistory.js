@@ -1,35 +1,34 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../config/db");
+const sequelize = require("../config/database");
 
-const ActionHistory = sequelize.define(
-  "ActionHistory",
+const Action = sequelize.define(
+  "Action",
   {
     id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
+      type: DataTypes.BIGINT,
       autoIncrement: true,
+      primaryKey: true,
     },
-    device_id: {
-      type: DataTypes.INTEGER,
+    deviceId: {
+      type: DataTypes.BIGINT,
       allowNull: false,
+      field: "device_id",
     },
     action: {
-      type: DataTypes.STRING(50),
+      // hành động
+      type: DataTypes.STRING,
       allowNull: false,
     },
     status: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-    },
-    time: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
+      // trạng thái thiết bị
+      type: DataTypes.STRING,
+      allowNull: true,
     },
   },
   {
-    tableName: "action_history",
-    timestamps: false,
+    tableName: "ActionHistory",
+    timestamps: true,
   },
 );
 
-module.exports = ActionHistory;
+module.exports = Action;

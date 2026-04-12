@@ -17,15 +17,6 @@ export const API_ENDPOINTS = {
   // Actions/History
   ACTIONS: "/actions",
   ACTION_HISTORY: (filterType) => `/actions/history?type=${filterType}`,
-
-  // User/Profile
-  USER_PROFILE: "/user/profile",
-  USER_UPDATE: "/user/profile",
-  USER_SETTINGS: "/user/settings",
-
-  // Auth (placeholder)
-  AUTH_LOGIN: "/auth/login",
-  AUTH_LOGOUT: "/auth/logout",
 };
 
 /**
@@ -35,7 +26,7 @@ export const ERROR_MESSAGES = {
   NETWORK_ERROR: "Lỗi kết nối. Vui lòng kiểm tra đường truyền.",
   TIMEOUT_ERROR: "Yêu cầu hết thời gian. Vui lòng thử lại.",
   SERVER_ERROR: "Lỗi máy chủ. Vui lòng thử lại sau.",
-  UNAUTHORIZED: "Phiên làm việc hết hạn. Vui lòng đăng nhập lại.",
+  UNAUTHORIZED: "Truy cập bị từ chối.",
   FORBIDDEN: "Bạn không có quyền truy cập tài nguyên này.",
   NOT_FOUND: "Tài nguyên không tìm thấy.",
   VALIDATION_ERROR: "Dữ liệu không hợp lệ.",
