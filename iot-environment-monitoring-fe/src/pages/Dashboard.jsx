@@ -146,6 +146,7 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dashboardError, setDashboardError] = useState(null);
   const pendingTimeoutsRef = useRef({});
+  const devicesRef = useRef([]);
 
   const {
     connected,
@@ -162,6 +163,10 @@ export default function Dashboard() {
       pendingTimeoutsRef.current = {};
     };
   }, []);
+
+  useEffect(() => {
+    devicesRef.current = devices;
+  }, [devices]);
 
   useEffect(() => {
     const loadBackendDevicesAndState = async () => {
@@ -244,9 +249,7 @@ export default function Dashboard() {
             }
 
             const normalizedStatus = normalizeActionState(latestAction.status);
-            const isPending = ["PENDING", "LOADING"].includes(
-              normalizedStatus,
-            );
+            const isPending = ["PENDING", "LOADING"].includes(normalizedStatus);
             const isSuccessful = normalizedStatus === "ON";
             const isFailed = ["FAILED", "TIMEOUT"].includes(normalizedStatus);
 
@@ -347,56 +350,54 @@ export default function Dashboard() {
     const normalizedIncomingStatus = normalizeActionState(status);
 
     if (!actionId || !deviceId || !status) {
-      console.warn("Incomplete device packet received:", lastDevicePacket);
       return;
     }
 
     const isSuccess = status === "ON" || status === "OFF";
-    const isTargetOn =
-      targetState === "ON" || (targetState === undefined && status === "ON");
 
-    const resolvedUiDeviceIds = [];
+    console.log(
+      `[Socket Received] Device: ${deviceId}, Status: ${normalizedIncomingStatus}, Target: ${targetState}`,
+    );
+
     setDevices((prevDevices) =>
       prevDevices.map((device) =>
         String(device.backendId) === normalizedDeviceId
-          ? (() => {
-              console.log(
-                `[Socket Reconciliation] Device: ${device.id}, ActionId: ${actionId}, Status: ${normalizedIncomingStatus}`,
-              );
-
-              resolvedUiDeviceIds.push(device.id);
-
-              return {
-                ...device,
-                enabled: isSuccess ? isTargetOn : false,
-                pendingActionId: null,
-                errorMessage: isSuccess
-                  ? null
-                  : controlError ||
-                    "Thiết bị không phản hồi hoặc thực thi thất bại",
-              };
-            })()
+          ? {
+              ...device,
+              enabled: targetState === "ON",
+              pendingActionId: null,
+              errorMessage: isSuccess
+                ? null
+                : controlError ||
+                  "Thiết bị không phản hồi hoặc thực thi thất bại",
+            }
           : device,
       ),
     );
 
-    if (resolvedUiDeviceIds.length > 0) {
-      setLoadingStates((prev) => {
-        const nextLoadingStates = { ...prev };
+    const matchedUiDeviceIds = devicesRef.current
+      .filter((device) => String(device.backendId) === normalizedDeviceId)
+      .map((device) => device.id);
 
-        resolvedUiDeviceIds.forEach((deviceIdKey) => {
-          nextLoadingStates[deviceIdKey] = false;
-
-          const timerId = pendingTimeoutsRef.current[deviceIdKey];
-          if (timerId) {
-            clearTimeout(timerId);
-            delete pendingTimeoutsRef.current[deviceIdKey];
-          }
-        });
-
-        return nextLoadingStates;
-      });
+    if (matchedUiDeviceIds.length === 0) {
+      return;
     }
+
+    setLoadingStates((prevLoading) => {
+      const nextLoading = { ...prevLoading };
+
+      matchedUiDeviceIds.forEach((uiDeviceId) => {
+        nextLoading[uiDeviceId] = false;
+
+        const timeoutId = pendingTimeoutsRef.current[uiDeviceId];
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          delete pendingTimeoutsRef.current[uiDeviceId];
+        }
+      });
+
+      return nextLoading;
+    });
   }, [lastDevicePacket]);
 
   useEffect(() => {
@@ -463,6 +464,12 @@ export default function Dashboard() {
 
     setDashboardError(null);
     setLoadingStates((prev) => ({ ...prev, [deviceId]: true }));
+    // Clear previous error message for this device
+    setDevices((prev) =>
+      prev.map((device) =>
+        device.id === deviceId ? { ...device, errorMessage: null } : device,
+      ),
+    );
 
     try {
       const response = await api.post("/device/control", {
@@ -509,7 +516,8 @@ export default function Dashboard() {
             return {
               ...device,
               pendingActionId: null,
-              errorMessage: "Không nhận được phản hồi từ thiết bị. Vui lòng thử lại.",
+              errorMessage:
+                "Không nhận được phản hồi từ thiết bị. Vui lòng thử lại.",
             };
           }),
         );

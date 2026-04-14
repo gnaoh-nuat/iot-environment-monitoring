@@ -3,6 +3,7 @@ const DataSensor = require("../models/SensorData");
 const Sensor = require("../models/Sensor");
 const { emitSensorData } = require("../socket/socketHandler");
 const Action = require("../models/ActionHistory");
+const { Op } = require("sequelize");
 const { clearActionTimeout } = require("../services/deviceControlTracker");
 
 let ioRef;
@@ -171,39 +172,48 @@ mqttClient.on("message", async (topic, message) => {
 
           clearActionTimeout(actionLookupId);
 
-          let nextStatus = "FAILED";
-          let targetState = "OFF";
-          let error = null;
-
           if (normalizedIncomingStatus === "DONE") {
-            nextStatus =
+            const nextStatus =
               String(action.action).toUpperCase() === "ON" ? "ON" : "OFF";
-            targetState = nextStatus;
-          } else if (normalizedIncomingStatus === "FAILED") {
-            nextStatus = "FAILED";
-            targetState = "OFF";
-            error = data.error || "Device failed to execute command";
+            await action.update({ status: nextStatus });
+
+            emitSensorData(socketDeviceTopic, {
+              actionId: Number(actionLookupId),
+              deviceId: Number(action.deviceId),
+              status: nextStatus,
+              targetState: nextStatus,
+              error: null,
+              timestamp,
+            });
+            console.log(
+              `[DB] Updated ACTION ID ${actionLookupId}: PENDING -> ${nextStatus}`,
+            );
           } else {
-            nextStatus = "FAILED";
-            targetState = "OFF";
-            error = `Unsupported status '${status}' from device`;
+            const previousAction = await Action.findOne({
+              where: {
+                deviceId: action.deviceId,
+                status: { [Op.in]: ["ON", "OFF"] },
+              },
+              order: [["createdAt", "DESC"]],
+            });
+            const revertedStatus = previousAction
+              ? previousAction.status
+              : "OFF";
+
+            await action.update({ status: revertedStatus });
+
+            emitSensorData(socketDeviceTopic, {
+              actionId: Number(actionLookupId),
+              deviceId: Number(action.deviceId),
+              status: "FAILED",
+              targetState: revertedStatus,
+              error: data.error || "Thiết bị thực thi thất bại",
+              timestamp,
+            });
+            console.log(
+              `[DB] Action FAILED. Reverted ACTION ID ${actionLookupId} status to ${revertedStatus}`,
+            );
           }
-
-          await action.update({ status: nextStatus });
-
-          // ✅ Ensure actionId is ALWAYS sent (critical fix for frontend reconciliation)
-          emitSensorData(socketDeviceTopic, {
-            actionId: Number(actionLookupId), // Force number type
-            deviceId: Number(action.deviceId), // Ensure number type
-            status: nextStatus,
-            targetState,
-            error,
-            timestamp,
-          });
-
-          console.log(
-            `[DB and SOCKET] Updated ACTION ID ${actionLookupId}: ${action.status} -> ${nextStatus} | Emitted socket event with actionId=${actionLookupId}`,
-          );
         } else {
           // ✅ Emit with actionId even when action not found (important for debugging)
           emitSensorData(socketDeviceTopic, {

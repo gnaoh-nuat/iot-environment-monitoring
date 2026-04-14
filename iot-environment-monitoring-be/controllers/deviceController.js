@@ -1,5 +1,6 @@
 const Device = require("../models/Device");
 const Action = require("../models/ActionHistory");
+const { Op } = require("sequelize");
 const AppError = require("../utils/appError");
 const sequelize = require("../config/database");
 const { publishCommand } = require("../mqtt/mqttClient");
@@ -179,13 +180,23 @@ const controlDeviceFromDashboard = async (req, res, next) => {
           return;
         }
 
-        await actionRow.update({ status: "TIMEOUT" });
+        const previousAction = await Action.findOne({
+          where: {
+            deviceId: actionRow.deviceId,
+            status: { [Op.in]: ["ON", "OFF"] },
+          },
+          order: [["createdAt", "DESC"]],
+        });
+
+        const revertedStatus = previousAction ? previousAction.status : "OFF";
+
+        await actionRow.update({ status: revertedStatus });
 
         emitSensorData(socketDeviceTopic, {
           actionId: actionRow.id,
           deviceId: actionRow.deviceId,
-          status: "TIMEOUT",
-          targetState: "OFF",
+          status: "TIMEOUT", // Gửi TIMEOUT để UI biết là lỗi
+          targetState: revertedStatus, // Trạng thái thực tế sau khi hoàn tác
           error: "Device offline or no response within 10 seconds",
           timestamp: new Date().toISOString(),
         });
