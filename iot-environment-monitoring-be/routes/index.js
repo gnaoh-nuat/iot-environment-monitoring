@@ -5,8 +5,11 @@ const actionRouter = require("./actionHistoryRoutes");
 const deviceRouter = require("./deviceRoutes");
 const deviceControlRouter = require("./deviceControlRoutes");
 const sensorRouter = require("./sensorRoutes");
+const dashboardRouter = require("./dashboardRoutes");
 
 const router = express.Router();
+
+router.use("/dashboard", dashboardRouter);
 
 router.use("/data-sensors", dataSensorRouter);
 

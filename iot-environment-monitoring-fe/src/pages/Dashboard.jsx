@@ -169,46 +169,36 @@ export default function Dashboard() {
   }, [devices]);
 
   useEffect(() => {
-    const loadBackendDevicesAndState = async () => {
+    const loadDashboardSnapshot = async () => {
       try {
-        const [devicesResponse, actionsResponse] = await Promise.all([
-          api.get("/devices"),
-          api.get("/actions/search", {
-            params: {
-              pageNo: 1,
-              pageSize: 100,
-              sortBy: "createdAt",
-              sortOrder: "desc",
-            },
-          }),
-        ]);
-
-        const backendDevices = Array.isArray(devicesResponse.data)
-          ? devicesResponse.data
-          : [];
-        const actionRows = Array.isArray(actionsResponse.data)
-          ? actionsResponse.data
-          : [];
-
-        const latestActionByDeviceId = new Map();
-        actionRows.forEach((actionRow) => {
-          const deviceKey = String(actionRow?.deviceId ?? "");
-          if (deviceKey && !latestActionByDeviceId.has(deviceKey)) {
-            latestActionByDeviceId.set(deviceKey, actionRow);
-          }
+        // Gọi API lấy snapshot ban đầu
+        const response = await api.get("/dashboard/init", {
+          params: { historyLimit: 10 },
         });
+
+        // VÌ api.js trả về response.data, nên 'response' ở đây chính là
+        // object { success: true, data: { devices, sensorHistories... } }
+        const snapshotData = response.data || {}; // Đây là phần chứa dữ liệu thực sự
+
+        const backendDevices = Array.isArray(snapshotData.devices)
+          ? snapshotData.devices
+          : [];
+        const latestActionByDeviceId =
+          snapshotData.latestActionByDeviceId || {};
+        const sensorHistories = Array.isArray(snapshotData.sensorHistories)
+          ? snapshotData.sensorHistories
+          : [];
 
         const loadingMap = {};
 
+        // 1. Cập nhật Mapping Device ID
         setDevices((prevDevices) => {
           const assignedBackendIds = new Set();
 
           const devicesWithBackendIds = prevDevices.map((device, index) => {
             const matchedByKeyword = backendDevices.find((backendDevice) => {
               const backendId = String(backendDevice.id);
-              if (assignedBackendIds.has(backendId)) {
-                return false;
-              }
+              if (assignedBackendIds.has(backendId)) return false;
 
               const normalizedBackendName = normalizeDeviceName(
                 backendDevice.name,
@@ -235,18 +225,13 @@ export default function Dashboard() {
             };
           });
 
+          // 2. Cập nhật trạng thái ON/OFF/PENDING từ snapshot
           return devicesWithBackendIds.map((device) => {
-            if (!device.backendId) {
-              return device;
-            }
+            if (!device.backendId) return device;
 
-            const latestAction = latestActionByDeviceId.get(
-              String(device.backendId),
-            );
-
-            if (!latestAction) {
-              return device;
-            }
+            const latestAction =
+              latestActionByDeviceId[String(device.backendId)];
+            if (!latestAction) return device;
 
             const normalizedStatus = normalizeActionState(latestAction.status);
             const isPending = ["PENDING", "LOADING"].includes(normalizedStatus);
@@ -262,51 +247,17 @@ export default function Dashboard() {
               enabled: isSuccessful,
               pendingActionId: isPending ? Number(latestAction.id) : null,
               errorMessage: isFailed
-                ? normalizedStatus === "FAILED"
-                  ? "Thiết bị không phản hồi hoặc thực thi thất bại"
-                  : "Thiết bị offline hoặc quá thời gian phản hồi"
+                ? "Lỗi kết nối hoặc thiết bị không phản hồi"
                 : null,
             };
           });
         });
 
         setLoadingStates(loadingMap);
-      } catch (loadError) {
-        console.error("Failed to load backend devices:", loadError);
-      }
-    };
 
-    const loadInitialSensorHistory = async () => {
-      try {
-        const histories = await Promise.all(
-          HISTORY_SENSOR_NAMES.map(async (sensorName) => {
-            try {
-              const response = await api.get("/data-sensors/history", {
-                params: {
-                  sensorName,
-                  limit: 20,
-                },
-              });
-
-              return {
-                sensorName,
-                rows: response.data || [],
-              };
-            } catch (historyError) {
-              if (historyError.status === 404) {
-                return {
-                  sensorName,
-                  rows: [],
-                };
-              }
-
-              throw historyError;
-            }
-          }),
-        );
-
+        // 3. Cập nhật các chỉ số cảm biến (Nhiệt độ, Độ ẩm, Ánh sáng)
         const latestValues = {};
-        histories.forEach(({ sensorName, rows }) => {
+        sensorHistories.forEach(({ sensorName, rows }) => {
           const latestRow = rows[rows.length - 1];
           if (latestRow) {
             latestValues[sensorName] = Number(latestRow.value);
@@ -323,14 +274,20 @@ export default function Dashboard() {
           })),
         );
 
-        setChartData(buildChartDataFromHistories(histories));
+        // 4. Cập nhật dữ liệu biểu đồ từ lịch sử
+        setChartData(buildChartDataFromHistories(sensorHistories));
+
+        // Cập nhật thời gian snapshot
+        setLastUpdated(response.snapshotAt || new Date().toISOString());
       } catch (loadError) {
-        console.error("Failed to load sensor history:", loadError);
+        console.error("Lỗi khi tải dữ liệu Dashboard:", loadError);
+        setDashboardError(
+          "Không thể tải dữ liệu khởi tạo. Vui lòng kiểm tra Server.",
+        );
       }
     };
 
-    loadBackendDevicesAndState();
-    loadInitialSensorHistory();
+    loadDashboardSnapshot();
   }, []);
 
   useEffect(() => {
