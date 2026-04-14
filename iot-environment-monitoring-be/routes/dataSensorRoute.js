@@ -42,7 +42,7 @@ router.get("/history", getDataSensorHistory);
  * @swagger
  * /data-sensors/search:
  *   get:
- *     summary: Get & search data sensors (pagination, filter, sort)
+ *     summary: Search sensor data with pagination, filter, sort and free-text query
  *     tags: [Data Sensors]
  *     parameters:
  *       - in: query
@@ -55,7 +55,9 @@ router.get("/history", getDataSensorHistory);
  *         name: pageSize
  *         schema:
  *           type: integer
- *           example: 10
+ *           default: 10
+ *           minimum: 1
+ *           maximum: 100
  *
  *       - in: query
  *         name: sortBy
@@ -68,12 +70,34 @@ router.get("/history", getDataSensorHistory);
  *         schema:
  *           type: string
  *           enum: [asc, desc]
+ *           default: desc
  *
  *       - in: query
  *         name: sensorName
  *         schema:
  *           type: string
  *           example: temperature
+ *         description: Filter by sensor name (temperature, humidity, light)
+ *
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Free-text query, backend auto-detects time, id, sensor name or value
+ *
+ *       - in: query
+ *         name: start
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start datetime filter
+ *
+ *       - in: query
+ *         name: end
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End datetime filter
  *
  *       - in: query
  *         name: searchBy
@@ -85,13 +109,13 @@ router.get("/history", getDataSensorHistory);
  *         name: searchValue
  *         schema:
  *           type: string
- *           example: 28
- *
- *
+ *         description: Legacy search value (kept for compatibility)
  *
  *     responses:
  *       200:
  *         description: Success
+ *       400:
+ *         description: Invalid date/time filter
  */
 router.get("/search", searchDataSensors);
 

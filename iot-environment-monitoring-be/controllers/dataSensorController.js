@@ -1,8 +1,20 @@
 const { Op } = require("sequelize");
 const DataSensor = require("../models/SensorData");
 const Sensor = require("../models/Sensor");
-const sequelize = require("../config/database");
 const AppError = require("../utils/appError");
+
+const parseDateInput = (input) => {
+  const parsed = new Date(input);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const buildDayRange = (date) => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+};
 
 const getDataSensorHistory = async (req, res, next) => {
   try {
@@ -48,6 +60,9 @@ const searchDataSensors = async (req, res, next) => {
       sortBy = "createdAt",
       sortOrder = "desc",
       sensorName,
+      q,
+      start,
+      end,
       searchBy,
       searchValue,
     } = req.query;
@@ -65,41 +80,118 @@ const searchDataSensors = async (req, res, next) => {
     const offset = (pageNo - 1) * pageSize;
 
     const where = {};
-    const sensorWhere = {};
+    const andConditions = [];
 
     // ================= FILTER SENSOR =================
-    if (sensorName) {
-      sensorWhere.name = sensorName;
+    if (sensorName && sensorName !== "all") {
+      andConditions.push({
+        "$sensorInfo.name$": sensorName,
+      });
     }
 
-    // ================= SEARCH =================
-    if (searchValue && searchBy) {
+    // ================= DATE RANGE FILTER =================
+    if (start || end) {
+      const parsedStart = start ? parseDateInput(start) : null;
+      const parsedEnd = end ? parseDateInput(end) : null;
+
+      if (start && !parsedStart) {
+        throw new AppError(400, "Ngày bắt đầu không hợp lệ");
+      }
+
+      if (end && !parsedEnd) {
+        throw new AppError(400, "Ngày kết thúc không hợp lệ");
+      }
+
+      if (parsedStart && parsedEnd && parsedStart > parsedEnd) {
+        throw new AppError(400, "Khoảng thời gian không hợp lệ");
+      }
+
+      const timeFilter = {};
+      if (parsedStart) {
+        timeFilter[Op.gte] = parsedStart;
+      }
+      if (parsedEnd) {
+        timeFilter[Op.lte] = parsedEnd;
+      }
+
+      andConditions.push({ createdAt: timeFilter });
+    }
+
+    // ================= LEGACY SEARCH SUPPORT =================
+    if (!q && searchValue && searchBy) {
       switch (searchBy) {
         case "id":
-          where.id = searchValue;
+          andConditions.push({ id: searchValue });
           break;
-
         case "value":
-          where.value = {
-            [Op.like]: `%${searchValue}%`,
-          };
+          andConditions.push({
+            value: {
+              [Op.iLike]: `%${searchValue}%`,
+            },
+          });
           break;
-
         case "name":
-          sensorWhere.name = {
-            [Op.like]: `%${searchValue}%`,
-          };
+          andConditions.push({
+            "$sensorInfo.name$": {
+              [Op.iLike]: `%${searchValue}%`,
+            },
+          });
           break;
-
-        case "time":
-          const start = new Date(searchValue);
-          const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-
-          where.createdAt = {
-            [Op.between]: [start, end],
-          };
+        case "time": {
+          const parsed = parseDateInput(searchValue);
+          if (!parsed) {
+            throw new AppError(400, "Ngày không hợp lệ");
+          }
+          const { start: dayStart, end: dayEnd } = buildDayRange(parsed);
+          andConditions.push({
+            createdAt: {
+              [Op.between]: [dayStart, dayEnd],
+            },
+          });
           break;
+        }
       }
+    }
+
+    // ================= FREE-TEXT SEARCH (AUTO-INFER) =================
+    const normalizedQuery = String(q || "").trim();
+    if (normalizedQuery) {
+      const queryOrConditions = [
+        {
+          value: {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          },
+        },
+        {
+          "$sensorInfo.name$": {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          },
+        },
+      ];
+
+      if (/^\d+$/.test(normalizedQuery)) {
+        queryOrConditions.push({ id: Number.parseInt(normalizedQuery, 10) });
+      }
+
+      const parsedFreeTextDate = parseDateInput(normalizedQuery);
+      if (parsedFreeTextDate) {
+        const { start: dayStart, end: dayEnd } = buildDayRange(
+          parsedFreeTextDate,
+        );
+        queryOrConditions.push({
+          createdAt: {
+            [Op.between]: [dayStart, dayEnd],
+          },
+        });
+      }
+
+      andConditions.push({
+        [Op.or]: queryOrConditions,
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where[Op.and] = andConditions;
     }
 
     // ================= SORT VALIDATION =================
@@ -122,23 +214,30 @@ const searchDataSensors = async (req, res, next) => {
           model: Sensor,
           as: "sensorInfo",
           attributes: ["id", "name"],
-          where: Object.keys(sensorWhere).length ? sensorWhere : undefined,
+          required: true,
         },
       ],
       order: [[sortBy, sortOrder.toUpperCase()]],
       limit: pageSize,
       offset,
+      distinct: true,
+      subQuery: false,
     });
+
+    const totalPages = Math.ceil(count / pageSize) || 1;
 
     return res.status(200).json({
       success: true,
       data: rows,
       message: "Data sensors retrieved successfully",
       pagination: {
-        pageNo,
+        totalRecords: count,
+        totalPages,
+        currentPage: pageNo,
         pageSize,
+        // Backward compatibility fields
+        pageNo,
         total: count,
-        totalPages: Math.ceil(count / pageSize),
       },
     });
   } catch (err) {

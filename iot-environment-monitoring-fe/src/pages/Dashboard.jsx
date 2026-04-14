@@ -143,13 +143,11 @@ export default function Dashboard() {
   );
   const [loadingStates, setLoadingStates] = useState({});
   const [chartData, setChartData] = useState([]);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [dashboardError, setDashboardError] = useState(null);
   const pendingTimeoutsRef = useRef({});
   const devicesRef = useRef([]);
 
   const {
-    connected,
     lastSensorPacket,
     lastDevicePacket,
     error: socketError,
@@ -276,9 +274,6 @@ export default function Dashboard() {
 
         // 4. Cập nhật dữ liệu biểu đồ từ lịch sử
         setChartData(buildChartDataFromHistories(sensorHistories));
-
-        // Cập nhật thời gian snapshot
-        setLastUpdated(response.snapshotAt || new Date().toISOString());
       } catch (loadError) {
         console.error("Lỗi khi tải dữ liệu Dashboard:", loadError);
         setDashboardError(
@@ -394,8 +389,6 @@ export default function Dashboard() {
 
       return [...prevChartData, nextPoint].slice(-30);
     });
-
-    setLastUpdated(packetTimestamp);
   }, [lastSensorPacket]);
 
   const handleDeviceToggle = async (deviceId) => {
@@ -658,24 +651,6 @@ export default function Dashboard() {
   return (
     <div className="h-full min-h-[calc(100vh-140px)] flex gap-6 overflow-hidden">
       <aside className="w-1/4 flex flex-col gap-6 overflow-y-auto pr-2 pb-2">
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-              Realtime feed
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              {lastUpdated
-                ? `Cập nhật lần cuối: ${formatChartTime(lastUpdated)}`
-                : "Đang chờ dữ liệu từ ESP32"}
-            </p>
-          </div>
-          <div
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${connected ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}
-          >
-            {connected ? "Connected" : "Connecting"}
-          </div>
-        </div>
-
         <div className="flex flex-col gap-3 flex-shrink-0">
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">
             Cảm biến
