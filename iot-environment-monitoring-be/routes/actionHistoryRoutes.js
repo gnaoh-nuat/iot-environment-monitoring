@@ -17,7 +17,7 @@ const router = express.Router();
  * @swagger
  * /actions/control:
  *   post:
- *     summary: Control device (ON/OFF)
+ *     summary: Control device (ON/OFF) (legacy alias of /device/control)
  *     tags: [Actions]
  *     requestBody:
  *       required: true
@@ -37,12 +37,14 @@ const router = express.Router();
  *                 enum: [ON, OFF]
  *                 example: ON
  *     responses:
- *       200:
- *         description: Command sent successfully
+ *       202:
+ *         description: Command accepted and processing
  *       400:
  *         description: Invalid input
  *       404:
  *         description: Device not found
+ *       409:
+ *         description: Device already has pending command
  *       500:
  *         description: Internal server error
  */

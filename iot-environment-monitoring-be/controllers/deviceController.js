@@ -1,7 +1,12 @@
 const Device = require("../models/Device");
+const Action = require("../models/ActionHistory");
 const AppError = require("../utils/appError");
-const { Op } = require("sequelize");
 const sequelize = require("../config/database");
+const { publishCommand } = require("../mqtt/mqttClient");
+const { emitSensorData } = require("../socket/socketHandler");
+const { scheduleActionTimeout } = require("../services/deviceControlTracker");
+
+const socketDeviceTopic = process.env.SOCKET_DEVICE_TOPIC || "device-status";
 
 // ===== CREATE DEVICE =====
 const createDevice = async (req, res, next) => {
@@ -111,10 +116,111 @@ const deleteDevice = async (req, res, next) => {
   }
 };
 
+// ===== DASHBOARD CONTROL DEVICE =====
+const controlDeviceFromDashboard = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const { deviceId, action } = req.body;
+    const normalizedAction = String(action || "").toUpperCase();
+
+    if (!deviceId || !normalizedAction) {
+      throw new AppError(400, "deviceId and action are required");
+    }
+
+    if (!["ON", "OFF"].includes(normalizedAction)) {
+      throw new AppError(400, "Action must be ON or OFF");
+    }
+
+    const device = await Device.findByPk(deviceId, { transaction });
+    if (!device) {
+      throw new AppError(404, "Device not found");
+    }
+
+    const existingPendingAction = await Action.findOne({
+      where: {
+        deviceId,
+        status: "PENDING",
+      },
+      order: [["createdAt", "DESC"]],
+      transaction,
+    });
+
+    if (existingPendingAction) {
+      throw new AppError(
+        409,
+        "Device already has a pending command. Please wait for completion.",
+      );
+    }
+
+    const newAction = await Action.create(
+      {
+        deviceId,
+        action: normalizedAction,
+        status: "PENDING",
+      },
+      { transaction },
+    );
+
+    await transaction.commit();
+
+    const timestamp = new Date().toISOString();
+    publishCommand({
+      actionId: newAction.id,
+      deviceId,
+      action: normalizedAction,
+      timestamp,
+    });
+
+    scheduleActionTimeout(newAction.id, async () => {
+      try {
+        const actionRow = await Action.findByPk(newAction.id);
+        if (!actionRow || actionRow.status !== "PENDING") {
+          return;
+        }
+
+        await actionRow.update({ status: "TIMEOUT" });
+
+        emitSensorData(socketDeviceTopic, {
+          actionId: actionRow.id,
+          deviceId: actionRow.deviceId,
+          status: "TIMEOUT",
+          targetState: "OFF",
+          error: "Device offline or no response within 10 seconds",
+          timestamp: new Date().toISOString(),
+        });
+      } catch (timeoutError) {
+        console.error(
+          "[TIMEOUT] Failed to resolve timed-out action:",
+          timeoutError,
+        );
+      }
+    });
+
+    return res.status(202).json({
+      success: true,
+      data: {
+        actionId: newAction.id,
+        deviceId,
+        action: normalizedAction,
+        status: "PENDING",
+      },
+      message: "Dang xu ly",
+    });
+  } catch (err) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    next(err);
+  }
+};
+
 module.exports = {
   createDevice,
   getAllDevices,
   getDeviceById,
   updateDevice,
   deleteDevice,
+  controlDeviceFromDashboard,
 };
