@@ -3,6 +3,7 @@ const DataSensor = require("../models/SensorData");
 const Sensor = require("../models/Sensor");
 const { emitSensorData } = require("../socket/socketHandler");
 const Action = require("../models/ActionHistory");
+const Device = require("../models/Device");
 const { Op } = require("sequelize");
 const { clearActionTimeout } = require("../services/deviceControlTracker");
 
@@ -18,6 +19,8 @@ const sensorTopics = (
   .filter(Boolean);
 const commandTopic = process.env.MQTT_COMMAND_TOPIC || "devices/control";
 const statusTopic = process.env.MQTT_STATUS_TOPIC || "devices/status";
+const syncReqTopic = process.env.MQTT_SYNC_REQ_TOPIC || "devices/sync/req";
+const syncResTopic = process.env.MQTT_SYNC_RES_TOPIC || "devices/sync/res";
 
 const socketSensorTopic = process.env.SOCKET_SENSOR_TOPIC || "sensor-data";
 const socketDeviceTopic = process.env.SOCKET_DEVICE_TOPIC || "device-status";
@@ -64,6 +67,31 @@ const normalizeActionStatus = (rawStatus) => {
   return "UNKNOWN";
 };
 
+const buildDeviceSyncPayload = async () => {
+  const devices = await Device.findAll({ order: [["createdAt", "ASC"]] });
+  const latestActions = await Action.findAll({
+    where: { status: { [Op.in]: ["ON", "OFF"] } },
+    order: [["createdAt", "DESC"]],
+  });
+
+  const latestByDeviceId = {};
+  latestActions.forEach((action) => {
+    const key = String(action.deviceId);
+    if (!latestByDeviceId[key]) {
+      latestByDeviceId[key] = action;
+    }
+  });
+
+  return {
+    devices: devices.map((device) => {
+      const latest = latestByDeviceId[String(device.id)];
+      const state = latest ? String(latest.status).toUpperCase() : "OFF";
+      return { id: device.id, state };
+    }),
+    timestamp: new Date().toISOString(),
+  };
+};
+
 const mqttClient = mqtt.connect(`mqtt://${host}:${port}`, {
   username: process.env.MQTT_USERNAME,
   password: process.env.MQTT_PASSWORD,
@@ -73,12 +101,16 @@ mqttClient.on("connect", () => {
   console.log(`[MQTT] Connected to broker at mqtt://${host}:${port}`);
 
   // Subscribe topic
-  mqttClient.subscribe([...sensorTopics, statusTopic], (err) => {
+  mqttClient.subscribe([...sensorTopics, statusTopic, syncReqTopic], (err) => {
     if (err) {
       console.error("[MQTT] Subscribe error:", err);
     } else {
       console.log(
-        `[MQTT] Subscribed to: ${[...sensorTopics, statusTopic].join(", ")}`,
+        `[MQTT] Subscribed to: ${[
+          ...sensorTopics,
+          statusTopic,
+          syncReqTopic,
+        ].join(", ")}`,
       );
     }
   });
@@ -90,6 +122,24 @@ mqttClient.on("message", async (topic, message) => {
     const data = JSON.parse(message.toString());
 
     console.log(`[MQTT] Received from topic: ${topic}`, data);
+
+    if (topic === syncReqTopic) {
+      const payload = await buildDeviceSyncPayload();
+      mqttClient.publish(
+        syncResTopic,
+        JSON.stringify(payload),
+        { qos: 1 },
+        (err) => {
+          if (err) {
+            console.error("[MQTT] Publish sync response error:", err);
+            return;
+          }
+
+          console.log(`[MQTT] Sync response sent to ${syncResTopic}`, payload);
+        },
+      );
+      return;
+    }
 
     // 1. SENSOR DATA
     if (isSensorTopic(topic)) {
