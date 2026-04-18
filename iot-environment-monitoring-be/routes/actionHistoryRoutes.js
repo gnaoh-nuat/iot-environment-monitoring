@@ -28,7 +28,6 @@ const router = express.Router();
  *           type: integer
  *           default: 10
  *           minimum: 1
- *           maximum: 100
  *       - in: query
  *         name: deviceName
  *         schema:

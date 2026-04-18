@@ -57,7 +57,6 @@ router.get("/history", getDataSensorHistory);
  *           type: integer
  *           default: 10
  *           minimum: 1
- *           maximum: 100
  *
  *       - in: query
  *         name: sensorName

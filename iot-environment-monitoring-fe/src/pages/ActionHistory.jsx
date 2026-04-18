@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CheckCircle, XCircle, Clock3 } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
@@ -280,26 +280,12 @@ export default function ActionHistory() {
     { value: "OFF", label: "Tắt" },
   ];
 
-  const statusSummary = useMemo(() => {
-    return rows.reduce(
-      (summary, row) => {
-        const group = detectStatusGroup(row);
-        if (group === "success") {
-          summary.success += 1;
-        } else if (group === "pending") {
-          summary.pending += 1;
-        } else {
-          summary.failure += 1;
-        }
-        return summary;
-      },
-      {
-        success: 0,
-        failure: 0,
-        pending: 0,
-      },
-    );
-  }, [rows]);
+  const statusSelectOptions = [
+    { value: "all", label: "Tất cả trạng thái" },
+    { value: "success", label: "Thành công" },
+    { value: "failure", label: "Thất bại" },
+    { value: "pending", label: "Đang chờ" },
+  ];
 
   return (
     <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -322,70 +308,17 @@ export default function ActionHistory() {
               onChange={(val) => handleFilterChange(setFilterAction, val)}
               options={actionSelectOptions}
             />
+            <FilterSelect
+              value={filterStatusGroup}
+              onChange={(val) => handleFilterChange(setFilterStatusGroup, val)}
+              options={statusSelectOptions}
+            />
           </div>
 
           <PageSizeInput
             pageSize={pageSize}
             onChange={(val) => handleFilterChange(setPageSize, val)}
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              handleFilterChange(setFilterStatusGroup, "all");
-            }}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              filterStatusGroup === "all"
-                ? "bg-blue-600 text-white"
-                : "bg-blue-50 text-blue-600 border border-transparent"
-            }`}
-          >
-            <span>{pagination.totalRecords}</span>
-            <span>Tổng</span>
-          </button>
-
-          <button
-            onClick={() => {
-              handleFilterChange(setFilterStatusGroup, "success");
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-all ${
-              filterStatusGroup === "success"
-                ? "bg-green-50 border-green-500 text-green-600"
-                : "bg-white border-gray-200 text-green-600 hover:border-green-300"
-            }`}
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span>{statusSummary.success}</span>
-          </button>
-
-          <button
-            onClick={() => {
-              handleFilterChange(setFilterStatusGroup, "failure");
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-all ${
-              filterStatusGroup === "failure"
-                ? "bg-red-50 border-red-500 text-red-600"
-                : "bg-white border-gray-200 text-red-500 hover:border-red-300"
-            }`}
-          >
-            <XCircle className="w-4 h-4" />
-            <span>{statusSummary.failure}</span>
-          </button>
-
-          <button
-            onClick={() => {
-              handleFilterChange(setFilterStatusGroup, "pending");
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-all ${
-              filterStatusGroup === "pending"
-                ? "bg-amber-50 border-amber-500 text-amber-700"
-                : "bg-white border-gray-200 text-amber-700 hover:border-amber-300"
-            }`}
-          >
-            <Clock3 className="w-4 h-4" />
-            <span>{statusSummary.pending}</span>
-          </button>
         </div>
       </div>
 
@@ -407,8 +340,8 @@ export default function ActionHistory() {
                 "text-center",
                 "mx-auto",
               )}
-              {renderSortHeader("Thời gian", "createdAt")}
               {renderSortHeader("Trạng thái", "status")}
+              {renderSortHeader("Thời gian", "createdAt")}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -459,9 +392,6 @@ export default function ActionHistory() {
                         {toActionLabel(record.action)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {formatDateTime(record.createdAt)}
-                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span
@@ -474,6 +404,9 @@ export default function ActionHistory() {
                           {statusUI.label}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-500">
+                      {formatDateTime(record.createdAt)}
                     </td>
                   </tr>
                 );

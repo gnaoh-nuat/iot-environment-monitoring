@@ -39,7 +39,7 @@ const searchActions = async (req, res, next) => {
       Number.isFinite(parsedPageNo) && parsedPageNo > 0 ? parsedPageNo : 1;
     pageSize =
       Number.isFinite(parsedPageSize) && parsedPageSize > 0
-        ? Math.min(parsedPageSize, 100)
+        ? parsedPageSize
         : 10;
 
     const normalizedSortOrder = String(sortOrder || "desc").toLowerCase();

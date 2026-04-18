@@ -5,12 +5,11 @@ export default function PageSizeInput({ pageSize, onChange }) {
       <input
         type="number"
         min={1}
-        max={100}
         value={pageSize}
         onChange={(e) => {
           const parsedSize = Number.parseInt(e.target.value, 10);
-          if (Number.isFinite(parsedSize)) {
-            onChange(Math.min(Math.max(parsedSize, 1), 100));
+          if (Number.isFinite(parsedSize) && parsedSize > 0) {
+            onChange(parsedSize);
           }
         }}
         className="w-16 text-sm font-medium text-gray-700 focus:outline-none"
