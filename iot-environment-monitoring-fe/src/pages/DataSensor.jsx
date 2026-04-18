@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Search, ArrowUpDown } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
+import Pagination from "../components/Pagination";
 
 const SENSOR_OPTIONS = [
   { value: "all", label: "Tất cả cảm biến" },
@@ -29,6 +30,31 @@ const SENSOR_UI_META = {
     borderClass: "border-amber-200",
     dotClass: "bg-amber-500",
   },
+};
+
+const normalizeText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const resolveSensorType = (sensorName) => {
+  const normalizedName = normalizeText(sensorName);
+
+  if (/(temperature|temp|nhiet)/.test(normalizedName)) {
+    return "temperature";
+  }
+
+  if (/(humidity|humid|do am|am)/.test(normalizedName)) {
+    return "humidity";
+  }
+
+  if (/(light|anh sang|lux|sang)/.test(normalizedName)) {
+    return "light";
+  }
+
+  return null;
 };
 
 const formatDateTime = (value) => {
@@ -67,26 +93,6 @@ const formatSensorValue = (sensorName, rawValue) => {
   return `${numericValue}`;
 };
 
-const buildPageButtons = (currentPage, totalPages) => {
-  const visibleCount = Math.min(5, totalPages);
-  if (visibleCount <= 0) {
-    return [];
-  }
-
-  let startPage = 1;
-  if (totalPages > 5) {
-    if (currentPage <= 3) {
-      startPage = 1;
-    } else if (currentPage >= totalPages - 2) {
-      startPage = totalPages - 4;
-    } else {
-      startPage = currentPage - 2;
-    }
-  }
-
-  return Array.from({ length: visibleCount }, (_, index) => startPage + index);
-};
-
 export default function DataSensor() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSensor, setFilterSensor] = useState("all");
@@ -107,45 +113,50 @@ export default function DataSensor() {
   const refreshTimerRef = useRef(null);
   const { lastSensorPacket } = useSensorSocket();
 
-  const fetchSensorRows = useCallback(async () => {
-    setLoading(true);
+  const fetchSensorRows = useCallback(
+    async (isBackground = false) => {
+      if (!isBackground) {
+        setLoading(true);
+      }
 
-    try {
-      const response = await api.get("/data-sensors/search", {
-        params: {
-          pageNo: currentPage,
-          pageSize,
-          sortBy: "createdAt",
-          sortOrder,
-          sensorName: filterSensor === "all" ? undefined : filterSensor,
-          q: searchTerm.trim() || undefined,
-        },
-      });
+      try {
+        const response = await api.get("/data-sensors/search", {
+          params: {
+            pageNo: currentPage,
+            pageSize,
+            sortBy: "createdAt",
+            sortOrder,
+            sensorName: filterSensor === "all" ? undefined : filterSensor,
+            q: searchTerm.trim() || undefined,
+          },
+        });
 
-      const nextRows = Array.isArray(response?.data) ? response.data : [];
-      const nextPagination = response?.pagination || {};
+        const nextRows = Array.isArray(response?.data) ? response.data : [];
+        const nextPagination = response?.pagination || {};
 
-      setRows(nextRows);
-      setPagination({
-        totalRecords: Number(
-          nextPagination.totalRecords ?? nextPagination.total ?? 0,
-        ),
-        totalPages: Number(nextPagination.totalPages ?? 1),
-        currentPage: Number(
-          nextPagination.currentPage ?? nextPagination.pageNo ?? currentPage,
-        ),
-        pageSize: Number(nextPagination.pageSize ?? pageSize),
-      });
-      setError(null);
-    } catch (requestError) {
-      setError(requestError.message || "Không tải được dữ liệu cảm biến");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage, pageSize, sortOrder, filterSensor, searchTerm]);
+        setRows(nextRows);
+        setPagination({
+          totalRecords: Number(
+            nextPagination.totalRecords ?? nextPagination.total ?? 0,
+          ),
+          totalPages: Number(nextPagination.totalPages ?? 1),
+          currentPage: Number(
+            nextPagination.currentPage ?? nextPagination.pageNo ?? currentPage,
+          ),
+          pageSize: Number(nextPagination.pageSize ?? pageSize),
+        });
+        setError(null);
+      } catch (requestError) {
+        setError(requestError.message || "Không tải được dữ liệu cảm biến");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentPage, pageSize, sortOrder, filterSensor, searchTerm],
+  );
 
   useEffect(() => {
-    fetchSensorRows();
+    fetchSensorRows(false);
   }, [fetchSensorRows]);
 
   useEffect(() => {
@@ -158,7 +169,7 @@ export default function DataSensor() {
     }
 
     refreshTimerRef.current = setTimeout(() => {
-      fetchSensorRows();
+      fetchSensorRows(true);
     }, 300);
   }, [lastSensorPacket, fetchSensorRows]);
 
@@ -171,17 +182,6 @@ export default function DataSensor() {
   }, []);
 
   const totalPages = Math.max(1, pagination.totalPages || 1);
-  const pageButtons = useMemo(
-    () => buildPageButtons(currentPage, totalPages),
-    [currentPage, totalPages],
-  );
-
-  const displayStart =
-    pagination.totalRecords > 0 ? (currentPage - 1) * pageSize + 1 : 0;
-  const displayEnd =
-    pagination.totalRecords > 0
-      ? displayStart + Math.max(0, rows.length - 1)
-      : 0;
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
@@ -292,9 +292,10 @@ export default function DataSensor() {
               </tr>
             ) : (
               rows.map((record) => {
-                const sensorName = record?.sensorInfo?.name || "";
-                const sensorMeta = SENSOR_UI_META[sensorName] || {
-                  label: sensorName || "Không xác định",
+                const dbSensorName = record?.sensorInfo?.name || "";
+                const sensorType = resolveSensorType(dbSensorName);
+                const sensorMeta = SENSOR_UI_META[sensorType] || {
+                  label: dbSensorName || "Không xác định",
                   textClass: "text-gray-500",
                   borderClass: "border-gray-200",
                   dotClass: "bg-gray-400",
@@ -319,7 +320,7 @@ export default function DataSensor() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-gray-800">
-                      {formatSensorValue(sensorName, record.value)}
+                      {formatSensorValue(sensorType, record.value)}
                     </td>
                     <td className="px-6 py-4 text-gray-500">
                       {formatDateTime(record.createdAt)}
@@ -332,46 +333,13 @@ export default function DataSensor() {
         </table>
       </div>
 
-      <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-white text-sm">
-        <div className="font-medium text-gray-600">
-          <span className="text-gray-900">
-            {displayStart}-{displayEnd}
-          </span>
-          / {pagination.totalRecords}
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage <= 1}
-            className="p-1 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
-          </button>
-
-          {pageButtons.map((pageNum) => (
-            <button
-              key={pageNum}
-              onClick={() => handlePageChange(pageNum)}
-              className={`w-8 h-8 rounded-md flex items-center justify-center font-medium transition-colors ${
-                currentPage === pageNum
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              {pageNum}
-            </button>
-          ))}
-
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-            className="p-1 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronRight className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalRecords={pagination.totalRecords}
+        totalPages={pagination.totalPages}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }

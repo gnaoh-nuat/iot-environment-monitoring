@@ -182,6 +182,34 @@ const searchActions = async (req, res, next) => {
             [Op.iLike]: `%${normalizedQuery}%`,
           },
         },
+        Sequelize.where(
+          Sequelize.fn(
+            "to_char",
+            Sequelize.fn(
+              "timezone",
+              "Asia/Ho_Chi_Minh",
+              Sequelize.col("Action.createdAt"),
+            ),
+            "HH24:MI:SS",
+          ),
+          {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          },
+        ),
+        Sequelize.where(
+          Sequelize.fn(
+            "to_char",
+            Sequelize.fn(
+              "timezone",
+              "Asia/Ho_Chi_Minh",
+              Sequelize.col("Action.createdAt"),
+            ),
+            "DD/MM/YYYY",
+          ),
+          {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          },
+        ),
       ];
 
       if (/^\d+$/.test(normalizedQuery)) {

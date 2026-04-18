@@ -1,7 +1,48 @@
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 const DataSensor = require("../models/SensorData");
 const Sensor = require("../models/Sensor");
 const AppError = require("../utils/appError");
+
+const normalizeText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const SENSOR_KEYWORDS = {
+  temperature: [
+    "temperature",
+    "temp",
+    "nhiet",
+    "nhiet do",
+    "nhiệt",
+    "nhiệt độ",
+  ],
+  humidity: ["humidity", "humid", "do am", "am", "độ ẩm", "do am"],
+  light: ["light", "anh sang", "lux", "sang", "ánh sáng"],
+};
+
+const buildSensorNameLikeConditions = (input) => {
+  const normalizedInput = normalizeText(input);
+  const relatedKeywords = Object.values(SENSOR_KEYWORDS)
+    .flat()
+    .filter(
+      (keyword) =>
+        normalizedInput.includes(normalizeText(keyword)) ||
+        normalizeText(keyword).includes(normalizedInput),
+    );
+
+  const candidates = Array.from(new Set([input, ...relatedKeywords])).filter(
+    Boolean,
+  );
+
+  return candidates.map((candidate) => ({
+    "$sensorInfo.name$": {
+      [Op.iLike]: `%${candidate}%`,
+    },
+  }));
+};
 
 const parseDateInput = (input) => {
   const parsed = new Date(input);
@@ -84,9 +125,12 @@ const searchDataSensors = async (req, res, next) => {
 
     // ================= FILTER SENSOR =================
     if (sensorName && sensorName !== "all") {
-      andConditions.push({
-        "$sensorInfo.name$": sensorName,
-      });
+      const sensorNameConditions = buildSensorNameLikeConditions(sensorName);
+      andConditions.push(
+        sensorNameConditions.length > 1
+          ? { [Op.or]: sensorNameConditions }
+          : sensorNameConditions[0],
+      );
     }
 
     // ================= DATE RANGE FILTER =================
@@ -156,18 +200,55 @@ const searchDataSensors = async (req, res, next) => {
     // ================= FREE-TEXT SEARCH (AUTO-INFER) =================
     const normalizedQuery = String(q || "").trim();
     if (normalizedQuery) {
+      const normalizedKeyword = normalizeText(normalizedQuery);
+      const inferredSensorNameConditions = buildSensorNameLikeConditions(
+        normalizedKeyword,
+      );
+
       const queryOrConditions = [
-        {
-          value: {
-            [Op.iLike]: `%${normalizedQuery}%`,
-          },
-        },
+        Sequelize.where(Sequelize.cast(Sequelize.col("value"), "TEXT"), {
+          [Op.iLike]: `%${normalizedQuery}%`,
+        }),
         {
           "$sensorInfo.name$": {
             [Op.iLike]: `%${normalizedQuery}%`,
           },
         },
+        Sequelize.where(
+          Sequelize.fn(
+            "to_char",
+            Sequelize.fn(
+              "timezone",
+              "Asia/Ho_Chi_Minh",
+              Sequelize.col("DataSensor.createdAt"),
+            ),
+            "HH24:MI:SS",
+          ),
+          {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          },
+        ),
+        Sequelize.where(
+          Sequelize.fn(
+            "to_char",
+            Sequelize.fn(
+              "timezone",
+              "Asia/Ho_Chi_Minh",
+              Sequelize.col("DataSensor.createdAt"),
+            ),
+            "DD/MM/YYYY",
+          ),
+          {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          },
+        ),
       ];
+
+      if (inferredSensorNameConditions.length > 0) {
+        queryOrConditions.push({
+          [Op.or]: inferredSensorNameConditions,
+        });
+      }
 
       if (/^\d+$/.test(normalizedQuery)) {
         queryOrConditions.push({ id: Number.parseInt(normalizedQuery, 10) });

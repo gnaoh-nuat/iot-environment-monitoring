@@ -96,8 +96,8 @@ const buildChartDataFromHistories = (histories) => {
     rows.forEach((row) => {
       const rowDate = row.createdAt ? new Date(row.createdAt) : new Date();
 
-      // FIX: Làm tròn về chẵn giây để gom nhóm chính xác các cảm biến gửi cùng lúc
-      const timeKey = Math.floor(rowDate.getTime() / 1000) * 1000;
+      // FIX: Làm tròn thời gian chính xác tới bội số của 2 giây (chẵn 2s)
+      const timeKey = Math.round(rowDate.getTime() / 2000) * 2000;
 
       if (!chartMap.has(timeKey)) {
         chartMap.set(timeKey, {
@@ -111,13 +111,13 @@ const buildChartDataFromHistories = (histories) => {
   });
 
   return Array.from(chartMap.values())
-    .sort((first, second) => first.timestamp - second.timestamp) // Sort chuẩn theo số
+    .sort((first, second) => first.timestamp - second.timestamp)
     .map((entry) => {
       const nextEntry = { ...entry };
       delete nextEntry.timestamp;
       return nextEntry;
     })
-    .slice(-30);
+    .slice(-15);
 };
 
 const normalizeDeviceName = (name) =>
@@ -148,6 +148,8 @@ export default function Dashboard() {
   const [dashboardError, setDashboardError] = useState(null);
   const pendingTimeoutsRef = useRef({});
   const devicesRef = useRef([]);
+  const [isSensorOnline, setIsSensorOnline] = useState(false);
+  const lastSensorUpdateTimeRef = useRef(Date.now());
 
   const {
     lastSensorPacket,
@@ -169,11 +171,21 @@ export default function Dashboard() {
   }, [devices]);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      if (Date.now() - lastSensorUpdateTimeRef.current > 10000) {
+        setIsSensorOnline(false);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     const loadDashboardSnapshot = async () => {
       try {
         // Gọi API lấy snapshot ban đầu
         const response = await api.get("/dashboard/init", {
-          params: { historyLimit: 10 },
+          params: { historyLimit: 15 },
         });
 
         // VÌ api.js trả về response.data, nên 'response' ở đây chính là
@@ -360,36 +372,35 @@ export default function Dashboard() {
       return;
     }
 
-    const packetTimestamp =
-      lastSensorPacket.timestamp || new Date().toISOString();
+    lastSensorUpdateTimeRef.current = Date.now();
+    setIsSensorOnline(true);
 
-    setSensors((prevSensors) =>
-      prevSensors.map((sensor) => {
-        const matchedReading = readings.find(
-          (reading) => reading.name === sensor.id,
-        );
+    const packetDate = new Date(lastSensorPacket.timestamp || Date.now());
 
-        if (!matchedReading) {
-          return sensor;
-        }
-
-        return {
-          ...sensor,
-          value: Number(matchedReading.value),
-        };
-      }),
-    );
+    // LÀM TRÒN: Ép thời gian của Socket về mốc chẵn 2 giây
+    const timeKey = Math.round(packetDate.getTime() / 2000) * 2000;
+    const formattedTime = formatChartTime(new Date(timeKey));
 
     setChartData((prevChartData) => {
-      const nextPoint = {
-        time: formatChartTime(packetTimestamp),
-      };
+      const newData = [...prevChartData];
 
+      // Kiểm tra xem mốc thời gian này đã có điểm trên biểu đồ chưa
+      const existingIndex = newData.findIndex((p) => p.time === formattedTime);
+
+      const nextPoint = { time: formattedTime };
       readings.forEach((reading) => {
         nextPoint[reading.name] = Number(reading.value);
       });
 
-      return [...prevChartData, nextPoint].slice(-30);
+      if (existingIndex >= 0) {
+        // Đã có -> Cập nhật đè lên cột hiện tại, không tạo thêm điểm ở giữa
+        newData[existingIndex] = { ...newData[existingIndex], ...nextPoint };
+      } else {
+        // Chưa có -> Tạo cột mới
+        newData.push(nextPoint);
+      }
+
+      return newData.slice(-15);
     });
   }, [lastSensorPacket]);
 
@@ -516,7 +527,7 @@ export default function Dashboard() {
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="#F3F4F6"
-            vertical={false}
+            vertical={true}
           />
           <XAxis
             dataKey="time"
@@ -525,6 +536,7 @@ export default function Dashboard() {
             tickLine={false}
             axisLine={{ stroke: "#E5E7EB" }}
             dy={10}
+            interval={0}
           />
           <YAxis
             stroke="#9CA3AF"
@@ -586,7 +598,7 @@ export default function Dashboard() {
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="#F3F4F6"
-            vertical={false}
+            vertical={true}
           />
           <XAxis
             dataKey="time"
@@ -595,6 +607,7 @@ export default function Dashboard() {
             tickLine={false}
             axisLine={{ stroke: "#E5E7EB" }}
             dy={10}
+            interval={0}
           />
           <YAxis
             stroke="#9CA3AF"
@@ -693,7 +706,13 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="flex-shrink-0">
-                      <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-sm shadow-green-200" />
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full shadow-sm transition-colors duration-500 ${
+                          isSensorOnline
+                            ? "bg-green-500 animate-pulse shadow-green-200"
+                            : "bg-gray-300 shadow-gray-200"
+                        }`}
+                      />
                     </div>
                   </div>
                 </div>
