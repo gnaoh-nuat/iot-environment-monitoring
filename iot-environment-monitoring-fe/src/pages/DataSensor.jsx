@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, ArrowUpDown } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
 import Pagination from "../components/Pagination";
+import SearchBar from "../components/filters/SearchBar";
+import FilterSelect from "../components/filters/FilterSelect";
+import PageSizeInput from "../components/filters/PageSizeInput";
 
 const SENSOR_OPTIONS = [
   { value: "all", label: "Tất cả cảm biến" },
@@ -96,7 +98,6 @@ const formatSensorValue = (sensorName, rawValue) => {
 export default function DataSensor() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSensor, setFilterSensor] = useState("all");
-  const [sortOrder, setSortOrder] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -125,7 +126,7 @@ export default function DataSensor() {
             pageNo: currentPage,
             pageSize,
             sortBy: "createdAt",
-            sortOrder,
+            sortOrder: "desc",
             sensorName: filterSensor === "all" ? undefined : filterSensor,
             q: searchTerm.trim() || undefined,
           },
@@ -152,7 +153,7 @@ export default function DataSensor() {
         setLoading(false);
       }
     },
-    [currentPage, pageSize, sortOrder, filterSensor, searchTerm],
+    [currentPage, pageSize, filterSensor, searchTerm],
   );
 
   useEffect(() => {
@@ -200,64 +201,27 @@ export default function DataSensor() {
   };
 
   const handlePageSizeChange = (value) => {
-    const parsedSize = Number.parseInt(value, 10);
-    if (!Number.isFinite(parsedSize)) {
-      return;
-    }
-
-    const safeSize = Math.min(Math.max(parsedSize, 1), 100);
-    setPageSize(safeSize);
+    setPageSize(value);
     setCurrentPage(1);
   };
 
   return (
     <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo thời gian, cảm biến hoặc giá trị..."
-            value={searchTerm}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-gray-400"
-          />
-        </div>
+        <SearchBar
+          value={searchTerm}
+          onChange={handleSearchChange}
+          placeholder="Tìm kiếm theo thời gian, cảm biến hoặc giá trị..."
+        />
 
         <div className="flex items-center gap-3 flex-wrap">
-          <select
+          <FilterSelect
             value={filterSensor}
-            onChange={(event) => handleSensorChange(event.target.value)}
-            className="appearance-none pl-4 pr-8 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 focus:outline-none focus:border-blue-500 cursor-pointer font-medium text-gray-700"
-          >
-            {SENSOR_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            onChange={handleSensorChange}
+            options={SENSOR_OPTIONS}
+          />
 
-          <button
-            onClick={() =>
-              setSortOrder((prevSort) => (prevSort === "asc" ? "desc" : "asc"))
-            }
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-all text-gray-700"
-          >
-            <ArrowUpDown className="w-4 h-4" />
-            {sortOrder === "desc" ? "Mới nhất" : "Cũ nhất"}
-          </button>
-
-          <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg bg-white">
-            <span className="text-sm text-gray-600">/trang</span>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={pageSize}
-              onChange={(event) => handlePageSizeChange(event.target.value)}
-              className="w-16 text-sm font-medium text-gray-700 focus:outline-none"
-            />
-          </div>
+          <PageSizeInput pageSize={pageSize} onChange={handlePageSizeChange} />
         </div>
       </div>
 

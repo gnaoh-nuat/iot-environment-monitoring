@@ -166,6 +166,9 @@ const searchActions = async (req, res, next) => {
     // FREE-TEXT SEARCH (AUTO-INFER)
     const normalizedQuery = String(q || "").trim();
     if (normalizedQuery) {
+      // Xóa dấu phẩy nếu dính từ UI
+      const timeQuery = normalizedQuery.replace(/,/g, "").replace(/\s+/g, " ");
+
       const queryOrConditions = [
         {
           action: {
@@ -190,12 +193,13 @@ const searchActions = async (req, res, next) => {
               "Asia/Ho_Chi_Minh",
               Sequelize.col("Action.createdAt"),
             ),
-            "HH24:MI:SS",
+            "HH24:MI:SS DD/MM/YYYY",
           ),
           {
-            [Op.iLike]: `%${normalizedQuery}%`,
+            [Op.iLike]: `%${timeQuery}%`,
           },
         ),
+        // Dự phòng định dạng ngược
         Sequelize.where(
           Sequelize.fn(
             "to_char",
@@ -204,10 +208,10 @@ const searchActions = async (req, res, next) => {
               "Asia/Ho_Chi_Minh",
               Sequelize.col("Action.createdAt"),
             ),
-            "DD/MM/YYYY",
+            "DD/MM/YYYY HH24:MI:SS",
           ),
           {
-            [Op.iLike]: `%${normalizedQuery}%`,
+            [Op.iLike]: `%${timeQuery}%`,
           },
         ),
       ];

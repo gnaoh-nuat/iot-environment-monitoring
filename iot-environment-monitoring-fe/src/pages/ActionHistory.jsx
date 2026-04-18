@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Search,
-  ArrowUpDown,
-  CheckCircle,
-  XCircle,
-  Clock3,
-} from "lucide-react";
+import { CheckCircle, XCircle, Clock3 } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
 import Pagination from "../components/Pagination";
+import SearchBar from "../components/filters/SearchBar";
+import FilterSelect from "../components/filters/FilterSelect";
+import PageSizeInput from "../components/filters/PageSizeInput";
 
 const formatDateTime = (value) => {
   if (!value) {
@@ -83,7 +80,6 @@ export default function ActionHistory() {
   const [filterDevice, setFilterDevice] = useState("all");
   const [filterAction, setFilterAction] = useState("all");
   const [filterStatusGroup, setFilterStatusGroup] = useState("all");
-  const [sortOrder, setSortOrder] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -123,7 +119,7 @@ export default function ActionHistory() {
             pageNo: currentPage,
             pageSize,
             sortBy: "createdAt",
-            sortOrder,
+            sortOrder: "desc",
             deviceName: filterDevice === "all" ? undefined : filterDevice,
             action: filterAction === "all" ? undefined : filterAction,
             statusGroup:
@@ -160,7 +156,6 @@ export default function ActionHistory() {
       filterStatusGroup,
       pageSize,
       searchTerm,
-      sortOrder,
     ],
   );
 
@@ -210,6 +205,20 @@ export default function ActionHistory() {
 
   const totalPages = Math.max(1, pagination.totalPages || 1);
 
+  const deviceSelectOptions = [
+    { value: "all", label: "Tất cả thiết bị" },
+    ...deviceOptions.map((device) => ({
+      value: device.name,
+      label: device.name,
+    })),
+  ];
+
+  const actionSelectOptions = [
+    { value: "all", label: "Tất cả hành động" },
+    { value: "ON", label: "Bật" },
+    { value: "OFF", label: "Tắt" },
+  ];
+
   const statusSummary = useMemo(() => {
     return rows.reduce(
       (summary, row) => {
@@ -235,77 +244,29 @@ export default function ActionHistory() {
     <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 flex-1">
-          <div className="relative min-w-[240px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm thiết bị hoặc thời gian..."
-              value={searchTerm}
-              onChange={(e) =>
-                handleFilterChange(setSearchTerm, e.target.value)
-              }
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-gray-400"
-            />
-          </div>
+          <SearchBar
+            value={searchTerm}
+            onChange={(val) => handleFilterChange(setSearchTerm, val)}
+            placeholder="Tìm kiếm thiết bị hoặc thời gian..."
+          />
 
           <div className="flex items-center gap-2">
-            <select
+            <FilterSelect
               value={filterDevice}
-              onChange={(event) =>
-                handleFilterChange(setFilterDevice, event.target.value)
-              }
-              className="appearance-none pl-4 pr-8 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 focus:outline-none font-medium text-gray-700 cursor-pointer"
-            >
-              <option value="all">Tất cả thiết bị</option>
-              {deviceOptions.map((device) => (
-                <option key={device.id} value={device.name}>
-                  {device.name}
-                </option>
-              ))}
-            </select>
-
-            <select
+              onChange={(val) => handleFilterChange(setFilterDevice, val)}
+              options={deviceSelectOptions}
+            />
+            <FilterSelect
               value={filterAction}
-              onChange={(event) =>
-                handleFilterChange(setFilterAction, event.target.value)
-              }
-              className="appearance-none pl-4 pr-8 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 focus:outline-none font-medium text-gray-700 cursor-pointer"
-            >
-              <option value="all">Tất cả hành động</option>
-              <option value="ON">Bật</option>
-              <option value="OFF">Tắt</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg bg-white">
-            <span className="text-sm text-gray-600">/trang</span>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={pageSize}
-              onChange={(event) => {
-                const parsedSize = Number.parseInt(event.target.value, 10);
-                if (Number.isFinite(parsedSize)) {
-                  handleFilterChange(
-                    setPageSize,
-                    Math.min(Math.max(parsedSize, 1), 100),
-                  );
-                }
-              }}
-              className="w-16 text-sm font-medium text-gray-700 focus:outline-none"
+              onChange={(val) => handleFilterChange(setFilterAction, val)}
+              options={actionSelectOptions}
             />
           </div>
 
-          <button
-            onClick={() =>
-              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-            }
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-all text-gray-700"
-          >
-            <ArrowUpDown className="w-4 h-4" />
-            {sortOrder === "desc" ? "Mới nhất" : "Cũ nhất"}
-          </button>
+          <PageSizeInput
+            pageSize={pageSize}
+            onChange={(val) => handleFilterChange(setPageSize, val)}
+          />
         </div>
 
         <div className="flex items-center gap-2">

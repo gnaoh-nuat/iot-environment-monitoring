@@ -201,9 +201,11 @@ const searchDataSensors = async (req, res, next) => {
     const normalizedQuery = String(q || "").trim();
     if (normalizedQuery) {
       const normalizedKeyword = normalizeText(normalizedQuery);
-      const inferredSensorNameConditions = buildSensorNameLikeConditions(
-        normalizedKeyword,
-      );
+      const inferredSensorNameConditions =
+        buildSensorNameLikeConditions(normalizedKeyword);
+
+      // Xóa dấu phẩy nếu trình duyệt copy bị dính (vd: 03:58:17, 13/04/2026 -> 03:58:17 13/04/2026)
+      const timeQuery = normalizedQuery.replace(/,/g, "").replace(/\s+/g, " ");
 
       const queryOrConditions = [
         Sequelize.where(Sequelize.cast(Sequelize.col("value"), "TEXT"), {
@@ -222,12 +224,13 @@ const searchDataSensors = async (req, res, next) => {
               "Asia/Ho_Chi_Minh",
               Sequelize.col("DataSensor.createdAt"),
             ),
-            "HH24:MI:SS",
+            "HH24:MI:SS DD/MM/YYYY",
           ),
           {
-            [Op.iLike]: `%${normalizedQuery}%`,
+            [Op.iLike]: `%${timeQuery}%`,
           },
         ),
+        // Dự phòng trường hợp người dùng copy ngược: DD/MM/YYYY HH:MM:SS
         Sequelize.where(
           Sequelize.fn(
             "to_char",
@@ -236,10 +239,10 @@ const searchDataSensors = async (req, res, next) => {
               "Asia/Ho_Chi_Minh",
               Sequelize.col("DataSensor.createdAt"),
             ),
-            "DD/MM/YYYY",
+            "DD/MM/YYYY HH24:MI:SS",
           ),
           {
-            [Op.iLike]: `%${normalizedQuery}%`,
+            [Op.iLike]: `%${timeQuery}%`,
           },
         ),
       ];
