@@ -2,7 +2,6 @@ const Action = require("../models/ActionHistory");
 const Device = require("../models/Device");
 const { Op, Sequelize } = require("sequelize");
 const AppError = require("../utils/appError");
-const { controlDeviceFromDashboard } = require("./deviceController");
 
 const parseDateInput = (input) => {
   const parsed = new Date(input);
@@ -18,12 +17,7 @@ const buildDayRange = (date) => {
 };
 
 // ==========================================
-// 1. ĐIỀU KHIỂN THIẾT BỊ (ON/OFF)
-// ==========================================
-const controlDevice = controlDeviceFromDashboard;
-
-// ==========================================
-// 2. TÌM KIẾM & LỌC LỊCH SỬ THAO TÁC
+// TÌM KIẾM & LỌC LỊCH SỬ THAO TÁC
 // ==========================================
 const searchActions = async (req, res, next) => {
   try {
@@ -196,9 +190,8 @@ const searchActions = async (req, res, next) => {
 
       const parsedFreeTextDate = parseDateInput(normalizedQuery);
       if (parsedFreeTextDate) {
-        const { start: dayStart, end: dayEnd } = buildDayRange(
-          parsedFreeTextDate,
-        );
+        const { start: dayStart, end: dayEnd } =
+          buildDayRange(parsedFreeTextDate);
         queryOrConditions.push({
           createdAt: {
             [Op.between]: [dayStart, dayEnd],
@@ -268,6 +261,5 @@ const searchActions = async (req, res, next) => {
 };
 
 module.exports = {
-  controlDevice,
   searchActions,
 };

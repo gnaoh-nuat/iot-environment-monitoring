@@ -1,8 +1,5 @@
 const express = require("express");
-const {
-  controlDevice,
-  searchActions,
-} = require("../controllers/actionHistoryController");
+const { searchActions } = require("../controllers/actionHistoryController");
 
 const router = express.Router();
 
@@ -12,43 +9,6 @@ const router = express.Router();
  *   name: Actions
  *   description: Device control APIs
  */
-
-/**
- * @swagger
- * /actions/control:
- *   post:
- *     summary: Control device (ON/OFF) (legacy alias of /device/control)
- *     tags: [Actions]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - deviceId
- *               - action
- *             properties:
- *               deviceId:
- *                 type: integer
- *                 example: 1
- *               action:
- *                 type: string
- *                 enum: [ON, OFF]
- *                 example: ON
- *     responses:
- *       202:
- *         description: Command accepted and processing
- *       400:
- *         description: Invalid input
- *       404:
- *         description: Device not found
- *       409:
- *         description: Device already has pending command
- *       500:
- *         description: Internal server error
- */
-router.post("/control", controlDevice);
 
 /**
  * @swagger

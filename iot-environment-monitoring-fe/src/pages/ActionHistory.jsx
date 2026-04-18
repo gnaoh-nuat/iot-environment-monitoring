@@ -155,9 +155,13 @@ export default function ActionHistory() {
 
       setRows(nextRows);
       setPagination({
-        totalRecords: Number(nextPagination.totalRecords ?? nextPagination.total ?? 0),
+        totalRecords: Number(
+          nextPagination.totalRecords ?? nextPagination.total ?? 0,
+        ),
         totalPages: Number(nextPagination.totalPages ?? 1),
-        currentPage: Number(nextPagination.currentPage ?? nextPagination.pageNo ?? currentPage),
+        currentPage: Number(
+          nextPagination.currentPage ?? nextPagination.pageNo ?? currentPage,
+        ),
         pageSize: Number(nextPagination.pageSize ?? pageSize),
       });
       setError(null);
@@ -460,8 +464,12 @@ export default function ActionHistory() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusUI.dotClass}`}></span>
-                        <StatusIcon className={`w-4 h-4 ${statusUI.textClass}`} />
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${statusUI.dotClass}`}
+                        ></span>
+                        <StatusIcon
+                          className={`w-4 h-4 ${statusUI.textClass}`}
+                        />
                         <span className={`font-bold ${statusUI.textClass}`}>
                           {statusUI.label}
                         </span>

@@ -175,9 +175,8 @@ const searchDataSensors = async (req, res, next) => {
 
       const parsedFreeTextDate = parseDateInput(normalizedQuery);
       if (parsedFreeTextDate) {
-        const { start: dayStart, end: dayEnd } = buildDayRange(
-          parsedFreeTextDate,
-        );
+        const { start: dayStart, end: dayEnd } =
+          buildDayRange(parsedFreeTextDate);
         queryOrConditions.push({
           createdAt: {
             [Op.between]: [dayStart, dayEnd],

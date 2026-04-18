@@ -95,24 +95,26 @@ const buildChartDataFromHistories = (histories) => {
   histories.forEach(({ sensorName, rows }) => {
     rows.forEach((row) => {
       const rowDate = row.createdAt ? new Date(row.createdAt) : new Date();
-      const sortKey = rowDate.toISOString();
 
-      if (!chartMap.has(sortKey)) {
-        chartMap.set(sortKey, {
-          sortKey,
-          time: formatChartTime(rowDate),
+      // FIX: Làm tròn về chẵn giây để gom nhóm chính xác các cảm biến gửi cùng lúc
+      const timeKey = Math.floor(rowDate.getTime() / 1000) * 1000;
+
+      if (!chartMap.has(timeKey)) {
+        chartMap.set(timeKey, {
+          timestamp: timeKey,
+          time: formatChartTime(new Date(timeKey)),
         });
       }
 
-      chartMap.get(sortKey)[sensorName] = Number(row.value);
+      chartMap.get(timeKey)[sensorName] = Number(row.value);
     });
   });
 
   return Array.from(chartMap.values())
-    .sort((first, second) => new Date(first.sortKey) - new Date(second.sortKey))
+    .sort((first, second) => first.timestamp - second.timestamp) // Sort chuẩn theo số
     .map((entry) => {
       const nextEntry = { ...entry };
-      delete nextEntry.sortKey;
+      delete nextEntry.timestamp;
       return nextEntry;
     })
     .slice(-30);
@@ -552,6 +554,7 @@ export default function Dashboard() {
             stroke={stroke}
             strokeWidth={3}
             name={name}
+            connectNulls={true}
             dot={{
               fill: stroke,
               r: 4,
@@ -621,6 +624,7 @@ export default function Dashboard() {
             stroke="#EF4444"
             strokeWidth={3}
             name="Nhiệt độ (°C)"
+            connectNulls={true}
             dot={{
               fill: "#EF4444",
               r: 4,
@@ -635,6 +639,7 @@ export default function Dashboard() {
             stroke="#3B82F6"
             strokeWidth={3}
             name="Độ ẩm (%)"
+            connectNulls={true}
             dot={{
               fill: "#3B82F6",
               r: 4,

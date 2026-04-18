@@ -127,9 +127,13 @@ export default function DataSensor() {
 
       setRows(nextRows);
       setPagination({
-        totalRecords: Number(nextPagination.totalRecords ?? nextPagination.total ?? 0),
+        totalRecords: Number(
+          nextPagination.totalRecords ?? nextPagination.total ?? 0,
+        ),
         totalPages: Number(nextPagination.totalPages ?? 1),
-        currentPage: Number(nextPagination.currentPage ?? nextPagination.pageNo ?? currentPage),
+        currentPage: Number(
+          nextPagination.currentPage ?? nextPagination.pageNo ?? currentPage,
+        ),
         pageSize: Number(nextPagination.pageSize ?? pageSize),
       });
       setError(null);
@@ -235,9 +239,7 @@ export default function DataSensor() {
 
           <button
             onClick={() =>
-              setSortOrder((prevSort) =>
-                prevSort === "asc" ? "desc" : "asc",
-              )
+              setSortOrder((prevSort) => (prevSort === "asc" ? "desc" : "asc"))
             }
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-all text-gray-700"
           >
@@ -303,7 +305,9 @@ export default function DataSensor() {
                     key={record.id}
                     className="bg-white hover:bg-gray-50/50 transition-colors"
                   >
-                    <td className="px-6 py-4 font-medium text-gray-600">#{record.id}</td>
+                    <td className="px-6 py-4 font-medium text-gray-600">
+                      #{record.id}
+                    </td>
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${sensorMeta.textClass} ${sensorMeta.borderClass}`}
