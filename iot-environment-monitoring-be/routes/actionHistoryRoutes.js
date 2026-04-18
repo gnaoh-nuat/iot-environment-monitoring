@@ -14,7 +14,7 @@ const router = express.Router();
  * @swagger
  * /actions/search:
  *   get:
- *     summary: Search action history with pagination, filter, sort and free-text query
+ *     summary: Search action history with pagination, filter and free-text query
  *     tags: [Actions]
  *     parameters:
  *       - in: query
@@ -29,17 +29,6 @@ const router = express.Router();
  *           default: 10
  *           minimum: 1
  *           maximum: 100
- *       - in: query
- *         name: sortBy
- *         schema:
- *           type: string
- *           enum: [id, action, status, createdAt]
- *       - in: query
- *         name: sortOrder
- *         schema:
- *           type: string
- *           enum: [asc, desc]
- *           default: desc
  *       - in: query
  *         name: deviceName
  *         schema:
@@ -63,27 +52,19 @@ const router = express.Router();
  *           type: string
  *         description: Free-text query, backend auto-detects date, id, device, action, status
  *       - in: query
- *         name: start
+ *         name: sortOrder
  *         schema:
  *           type: string
- *           format: date-time
- *         description: Start datetime filter
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order for selected sortBy column
  *       - in: query
- *         name: end
+ *         name: sortBy
  *         schema:
  *           type: string
- *           format: date-time
- *         description: End datetime filter
- *       - in: query
- *         name: searchBy
- *         schema:
- *           type: string
- *           enum: [id, action, status, deviceName, time]
- *       - in: query
- *         name: searchValue
- *         schema:
- *           type: string
- *         description: Legacy search value (kept for compatibility)
+ *           enum: [id, deviceName, action, createdAt, status]
+ *           default: createdAt
+ *         description: Sort field
  *     responses:
  *       200:
  *         description: Success

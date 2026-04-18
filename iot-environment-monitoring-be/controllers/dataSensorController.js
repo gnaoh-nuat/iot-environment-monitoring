@@ -98,14 +98,11 @@ const searchDataSensors = async (req, res, next) => {
     let {
       pageNo = 1,
       pageSize = 10,
-      sortBy = "createdAt",
-      sortOrder = "desc",
       sensorName,
       q,
-      start,
-      end,
-      searchBy,
-      searchValue,
+      searchType = "value",
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     const parsedPageNo = Number.parseInt(pageNo, 10);
@@ -133,160 +130,104 @@ const searchDataSensors = async (req, res, next) => {
       );
     }
 
-    // ================= DATE RANGE FILTER =================
-    if (start || end) {
-      const parsedStart = start ? parseDateInput(start) : null;
-      const parsedEnd = end ? parseDateInput(end) : null;
-
-      if (start && !parsedStart) {
-        throw new AppError(400, "Ngày bắt đầu không hợp lệ");
-      }
-
-      if (end && !parsedEnd) {
-        throw new AppError(400, "Ngày kết thúc không hợp lệ");
-      }
-
-      if (parsedStart && parsedEnd && parsedStart > parsedEnd) {
-        throw new AppError(400, "Khoảng thời gian không hợp lệ");
-      }
-
-      const timeFilter = {};
-      if (parsedStart) {
-        timeFilter[Op.gte] = parsedStart;
-      }
-      if (parsedEnd) {
-        timeFilter[Op.lte] = parsedEnd;
-      }
-
-      andConditions.push({ createdAt: timeFilter });
+    const normalizedSearchType = String(searchType || "value").toLowerCase();
+    if (!["value", "time"].includes(normalizedSearchType)) {
+      throw new AppError(400, "searchType không hợp lệ");
     }
 
-    // ================= LEGACY SEARCH SUPPORT =================
-    if (!q && searchValue && searchBy) {
-      switch (searchBy) {
-        case "id":
-          andConditions.push({ id: searchValue });
-          break;
-        case "value":
-          andConditions.push({
-            value: {
-              [Op.iLike]: `%${searchValue}%`,
+    const normalizedSortOrder = String(sortOrder || "desc").toLowerCase();
+    if (!["asc", "desc"].includes(normalizedSortOrder)) {
+      throw new AppError(400, "sortOrder không hợp lệ");
+    }
+
+    const normalizedSortBy = String(sortBy || "createdAt");
+    if (
+      !["id", "sensorName", "value", "createdAt"].includes(normalizedSortBy)
+    ) {
+      throw new AppError(400, "sortBy không hợp lệ");
+    }
+
+    let orderClause = [["createdAt", normalizedSortOrder.toUpperCase()]];
+    if (["id", "value", "createdAt"].includes(normalizedSortBy)) {
+      orderClause = [[normalizedSortBy, normalizedSortOrder.toUpperCase()]];
+    }
+    if (normalizedSortBy === "sensorName") {
+      orderClause = [
+        [
+          { model: Sensor, as: "sensorInfo" },
+          "name",
+          normalizedSortOrder.toUpperCase(),
+        ],
+      ];
+    }
+
+    // ================= FREE-TEXT SEARCH (BY SEARCH TYPE) =================
+    const normalizedQuery = String(q || "").trim();
+    if (normalizedQuery) {
+      if (normalizedSearchType === "value") {
+        andConditions.push(
+          Sequelize.where(Sequelize.cast(Sequelize.col("value"), "TEXT"), {
+            [Op.iLike]: `%${normalizedQuery}%`,
+          }),
+        );
+      }
+
+      if (normalizedSearchType === "time") {
+        // Xóa dấu phẩy nếu trình duyệt copy bị dính (vd: 03:58:17, 13/04/2026 -> 03:58:17 13/04/2026)
+        const timeQuery = normalizedQuery
+          .replace(/,/g, "")
+          .replace(/\s+/g, " ");
+
+        const timeSearchConditions = [
+          Sequelize.where(
+            Sequelize.fn(
+              "to_char",
+              Sequelize.fn(
+                "timezone",
+                "Asia/Ho_Chi_Minh",
+                Sequelize.col("DataSensor.createdAt"),
+              ),
+              "HH24:MI:SS DD/MM/YYYY",
+            ),
+            {
+              [Op.iLike]: `%${timeQuery}%`,
             },
-          });
-          break;
-        case "name":
-          andConditions.push({
-            "$sensorInfo.name$": {
-              [Op.iLike]: `%${searchValue}%`,
+          ),
+          Sequelize.where(
+            Sequelize.fn(
+              "to_char",
+              Sequelize.fn(
+                "timezone",
+                "Asia/Ho_Chi_Minh",
+                Sequelize.col("DataSensor.createdAt"),
+              ),
+              "DD/MM/YYYY HH24:MI:SS",
+            ),
+            {
+              [Op.iLike]: `%${timeQuery}%`,
             },
-          });
-          break;
-        case "time": {
-          const parsed = parseDateInput(searchValue);
-          if (!parsed) {
-            throw new AppError(400, "Ngày không hợp lệ");
-          }
-          const { start: dayStart, end: dayEnd } = buildDayRange(parsed);
-          andConditions.push({
+          ),
+        ];
+
+        const parsedFreeTextDate = parseDateInput(normalizedQuery);
+        if (parsedFreeTextDate) {
+          const { start: dayStart, end: dayEnd } =
+            buildDayRange(parsedFreeTextDate);
+          timeSearchConditions.push({
             createdAt: {
               [Op.between]: [dayStart, dayEnd],
             },
           });
-          break;
         }
-      }
-    }
 
-    // ================= FREE-TEXT SEARCH (AUTO-INFER) =================
-    const normalizedQuery = String(q || "").trim();
-    if (normalizedQuery) {
-      const normalizedKeyword = normalizeText(normalizedQuery);
-      const inferredSensorNameConditions =
-        buildSensorNameLikeConditions(normalizedKeyword);
-
-      // Xóa dấu phẩy nếu trình duyệt copy bị dính (vd: 03:58:17, 13/04/2026 -> 03:58:17 13/04/2026)
-      const timeQuery = normalizedQuery.replace(/,/g, "").replace(/\s+/g, " ");
-
-      const queryOrConditions = [
-        Sequelize.where(Sequelize.cast(Sequelize.col("value"), "TEXT"), {
-          [Op.iLike]: `%${normalizedQuery}%`,
-        }),
-        {
-          "$sensorInfo.name$": {
-            [Op.iLike]: `%${normalizedQuery}%`,
-          },
-        },
-        Sequelize.where(
-          Sequelize.fn(
-            "to_char",
-            Sequelize.fn(
-              "timezone",
-              "Asia/Ho_Chi_Minh",
-              Sequelize.col("DataSensor.createdAt"),
-            ),
-            "HH24:MI:SS DD/MM/YYYY",
-          ),
-          {
-            [Op.iLike]: `%${timeQuery}%`,
-          },
-        ),
-        // Dự phòng trường hợp người dùng copy ngược: DD/MM/YYYY HH:MM:SS
-        Sequelize.where(
-          Sequelize.fn(
-            "to_char",
-            Sequelize.fn(
-              "timezone",
-              "Asia/Ho_Chi_Minh",
-              Sequelize.col("DataSensor.createdAt"),
-            ),
-            "DD/MM/YYYY HH24:MI:SS",
-          ),
-          {
-            [Op.iLike]: `%${timeQuery}%`,
-          },
-        ),
-      ];
-
-      if (inferredSensorNameConditions.length > 0) {
-        queryOrConditions.push({
-          [Op.or]: inferredSensorNameConditions,
+        andConditions.push({
+          [Op.or]: timeSearchConditions,
         });
       }
-
-      if (/^\d+$/.test(normalizedQuery)) {
-        queryOrConditions.push({ id: Number.parseInt(normalizedQuery, 10) });
-      }
-
-      const parsedFreeTextDate = parseDateInput(normalizedQuery);
-      if (parsedFreeTextDate) {
-        const { start: dayStart, end: dayEnd } =
-          buildDayRange(parsedFreeTextDate);
-        queryOrConditions.push({
-          createdAt: {
-            [Op.between]: [dayStart, dayEnd],
-          },
-        });
-      }
-
-      andConditions.push({
-        [Op.or]: queryOrConditions,
-      });
     }
 
     if (andConditions.length > 0) {
       where[Op.and] = andConditions;
-    }
-
-    // ================= SORT VALIDATION =================
-    const allowedSortFields = ["id", "value", "createdAt"];
-    const allowedSortOrder = ["asc", "desc"];
-
-    if (!allowedSortFields.includes(sortBy)) {
-      sortBy = "createdAt";
-    }
-
-    if (!allowedSortOrder.includes(sortOrder.toLowerCase())) {
-      sortOrder = "desc";
     }
 
     // ================= QUERY =================
@@ -300,7 +241,7 @@ const searchDataSensors = async (req, res, next) => {
           required: true,
         },
       ],
-      order: [[sortBy, sortOrder.toUpperCase()]],
+      order: orderClause,
       limit: pageSize,
       offset,
       distinct: true,

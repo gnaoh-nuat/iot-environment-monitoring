@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
 import Pagination from "../components/Pagination";
@@ -11,6 +12,11 @@ const SENSOR_OPTIONS = [
   { value: "temperature", label: "Nhiệt độ" },
   { value: "humidity", label: "Độ ẩm" },
   { value: "light", label: "Ánh sáng" },
+];
+
+const SEARCH_TYPE_OPTIONS = [
+  { value: "value", label: "Theo giá trị" },
+  { value: "time", label: "Theo thời gian" },
 ];
 
 const SENSOR_UI_META = {
@@ -97,6 +103,9 @@ const formatSensorValue = (sensorName, rawValue) => {
 
 export default function DataSensor() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchType, setSearchType] = useState("value");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [filterSensor, setFilterSensor] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -125,10 +134,11 @@ export default function DataSensor() {
           params: {
             pageNo: currentPage,
             pageSize,
-            sortBy: "createdAt",
-            sortOrder: "desc",
             sensorName: filterSensor === "all" ? undefined : filterSensor,
             q: searchTerm.trim() || undefined,
+            searchType,
+            sortBy,
+            sortOrder,
           },
         });
 
@@ -153,7 +163,15 @@ export default function DataSensor() {
         setLoading(false);
       }
     },
-    [currentPage, pageSize, filterSensor, searchTerm],
+    [
+      currentPage,
+      pageSize,
+      filterSensor,
+      searchTerm,
+      searchType,
+      sortBy,
+      sortOrder,
+    ],
   );
 
   useEffect(() => {
@@ -195,9 +213,66 @@ export default function DataSensor() {
     setCurrentPage(1);
   };
 
+  const handleSearchTypeChange = (value) => {
+    setSearchType(value);
+    setCurrentPage(1);
+  };
+
   const handleSensorChange = (value) => {
     setFilterSensor(value);
     setCurrentPage(1);
+  };
+
+  const handleSortToggle = (columnKey) => {
+    if (sortBy === columnKey) {
+      setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+      setCurrentPage(1);
+      return;
+    }
+
+    setSortBy(columnKey);
+    setSortOrder(columnKey === "createdAt" ? "desc" : "asc");
+    setCurrentPage(1);
+  };
+
+  const renderSortHeader = (label, columnKey, thClassName = "") => {
+    const isActive = sortBy === columnKey;
+
+    return (
+      <th className={`px-6 py-4 font-semibold ${thClassName}`}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(columnKey)}
+          className={`group flex items-center gap-1.5 font-semibold transition-colors focus:outline-none ${
+            isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-600"
+          }`}
+          title={
+            isActive
+              ? sortOrder === "desc"
+                ? "Đang sắp xếp giảm dần"
+                : "Đang sắp xếp tăng dần"
+              : `Sắp xếp theo ${label}`
+          }
+        >
+          {label}
+          <span
+            className={`p-1 rounded transition-colors ${
+              isActive ? "bg-blue-50" : "bg-gray-100 group-hover:bg-gray-200"
+            }`}
+          >
+            {isActive ? (
+              sortOrder === "asc" ? (
+                <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+              ) : (
+                <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+              )
+            ) : (
+              <ArrowDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400" />
+            )}
+          </span>
+        </button>
+      </th>
+    );
   };
 
   const handlePageSizeChange = (value) => {
@@ -211,10 +286,20 @@ export default function DataSensor() {
         <SearchBar
           value={searchTerm}
           onChange={handleSearchChange}
-          placeholder="Tìm kiếm theo thời gian, cảm biến hoặc giá trị..."
+          placeholder={
+            searchType === "time"
+              ? "Dán thời gian (VD: 03:58:17 13/04/2026)..."
+              : "Tìm kiếm theo giá trị cảm biến..."
+          }
         />
 
         <div className="flex items-center gap-3 flex-wrap">
+          <FilterSelect
+            value={searchType}
+            onChange={handleSearchTypeChange}
+            options={SEARCH_TYPE_OPTIONS}
+          />
+
           <FilterSelect
             value={filterSensor}
             onChange={handleSensorChange}
@@ -235,10 +320,10 @@ export default function DataSensor() {
         <table className="w-full text-sm text-left">
           <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-4 font-semibold">ID</th>
-              <th className="px-6 py-4 font-semibold">Cảm biến</th>
-              <th className="px-6 py-4 font-semibold">Giá trị</th>
-              <th className="px-6 py-4 font-semibold">Thời gian</th>
+              {renderSortHeader("ID", "id")}
+              {renderSortHeader("Cảm biến", "sensorName")}
+              {renderSortHeader("Giá trị", "value")}
+              {renderSortHeader("Thời gian", "createdAt")}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

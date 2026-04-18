@@ -42,7 +42,7 @@ router.get("/history", getDataSensorHistory);
  * @swagger
  * /data-sensors/search:
  *   get:
- *     summary: Search sensor data with pagination, filter, sort and free-text query
+ *     summary: Search sensor data with pagination, sensor filter and scoped query by value/time
  *     tags: [Data Sensors]
  *     parameters:
  *       - in: query
@@ -60,19 +60,6 @@ router.get("/history", getDataSensorHistory);
  *           maximum: 100
  *
  *       - in: query
- *         name: sortBy
- *         schema:
- *           type: string
- *           enum: [id, value, createdAt]
- *
- *       - in: query
- *         name: sortOrder
- *         schema:
- *           type: string
- *           enum: [asc, desc]
- *           default: desc
- *
- *       - in: query
  *         name: sensorName
  *         schema:
  *           type: string
@@ -83,39 +70,37 @@ router.get("/history", getDataSensorHistory);
  *         name: q
  *         schema:
  *           type: string
- *         description: Free-text query, backend auto-detects time, id, sensor name or value
+ *         description: Search text in selected searchType field
  *
  *       - in: query
- *         name: start
+ *         name: searchType
  *         schema:
  *           type: string
- *           format: date-time
- *         description: Start datetime filter
+ *           enum: [value, time]
+ *           default: value
+ *         description: Select which column to search
  *
  *       - in: query
- *         name: end
+ *         name: sortOrder
  *         schema:
  *           type: string
- *           format: date-time
- *         description: End datetime filter
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order for selected sortBy column
  *
  *       - in: query
- *         name: searchBy
+ *         name: sortBy
  *         schema:
  *           type: string
- *           enum: [id, value, name, time]
- *
- *       - in: query
- *         name: searchValue
- *         schema:
- *           type: string
- *         description: Legacy search value (kept for compatibility)
+ *           enum: [id, sensorName, value, createdAt]
+ *           default: createdAt
+ *         description: Sort field
  *
  *     responses:
  *       200:
  *         description: Success
  *       400:
- *         description: Invalid date/time filter
+ *         description: Invalid searchType, sortOrder or sortBy
  */
 router.get("/search", searchDataSensors);
 

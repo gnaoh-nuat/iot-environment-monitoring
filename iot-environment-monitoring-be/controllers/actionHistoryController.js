@@ -24,16 +24,12 @@ const searchActions = async (req, res, next) => {
     let {
       pageNo = 1,
       pageSize = 10,
-      sortBy = "createdAt",
-      sortOrder = "desc",
       deviceName,
       action,
       statusGroup,
       q,
-      start,
-      end,
-      searchBy,
-      searchValue,
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     const parsedPageNo = Number.parseInt(pageNo, 10);
@@ -45,6 +41,34 @@ const searchActions = async (req, res, next) => {
       Number.isFinite(parsedPageSize) && parsedPageSize > 0
         ? Math.min(parsedPageSize, 100)
         : 10;
+
+    const normalizedSortOrder = String(sortOrder || "desc").toLowerCase();
+    if (!["asc", "desc"].includes(normalizedSortOrder)) {
+      throw new AppError(400, "sortOrder không hợp lệ");
+    }
+
+    const normalizedSortBy = String(sortBy || "createdAt");
+    if (
+      !["id", "deviceName", "action", "createdAt", "status"].includes(
+        normalizedSortBy,
+      )
+    ) {
+      throw new AppError(400, "sortBy không hợp lệ");
+    }
+
+    let orderClause = [["createdAt", normalizedSortOrder.toUpperCase()]];
+    if (["id", "action", "createdAt", "status"].includes(normalizedSortBy)) {
+      orderClause = [[normalizedSortBy, normalizedSortOrder.toUpperCase()]];
+    }
+    if (normalizedSortBy === "deviceName") {
+      orderClause = [
+        [
+          { model: Device, as: "deviceInfo" },
+          "name",
+          normalizedSortOrder.toUpperCase(),
+        ],
+      ];
+    }
 
     const offset = (pageNo - 1) * pageSize;
 
@@ -98,68 +122,6 @@ const searchActions = async (req, res, next) => {
         });
       } else {
         throw new AppError(400, "statusGroup không hợp lệ");
-      }
-    }
-
-    // FILTER THEO KHOẢNG THỜI GIAN
-    if (start || end) {
-      const parsedStart = start ? parseDateInput(start) : null;
-      const parsedEnd = end ? parseDateInput(end) : null;
-
-      if (start && !parsedStart) {
-        throw new AppError(400, "Ngày bắt đầu không hợp lệ");
-      }
-
-      if (end && !parsedEnd) {
-        throw new AppError(400, "Ngày kết thúc không hợp lệ");
-      }
-
-      if (parsedStart && parsedEnd && parsedStart > parsedEnd) {
-        throw new AppError(400, "Khoảng thời gian không hợp lệ");
-      }
-
-      const timeFilter = {};
-      if (parsedStart) {
-        timeFilter[Op.gte] = parsedStart;
-      }
-      if (parsedEnd) {
-        timeFilter[Op.lte] = parsedEnd;
-      }
-      andConditions.push({ createdAt: timeFilter });
-    }
-
-    // LEGACY SEARCH SUPPORT
-    if (!q && searchValue && searchBy) {
-      switch (searchBy) {
-        case "id":
-          andConditions.push({ id: searchValue });
-          break;
-        case "action":
-          andConditions.push({
-            action: { [Op.iLike]: `%${searchValue}%` },
-          });
-          break;
-        case "status":
-          andConditions.push({
-            status: { [Op.iLike]: `%${searchValue}%` },
-          });
-          break;
-        case "deviceName":
-          deviceWhere.name = { [Op.iLike]: `%${searchValue}%` };
-          break;
-        case "time": {
-          const parsed = parseDateInput(searchValue);
-          if (!parsed) {
-            throw new AppError(400, "Ngày không hợp lệ");
-          }
-          const { start: dayStart, end: dayEnd } = buildDayRange(parsed);
-          andConditions.push({
-            createdAt: {
-              [Op.between]: [dayStart, dayEnd],
-            },
-          });
-          break;
-        }
       }
     }
 
@@ -240,18 +202,6 @@ const searchActions = async (req, res, next) => {
       where[Op.and] = andConditions;
     }
 
-    // KIỂM TRA ĐIỀU KIỆN SORT TRÁNH LỖI SQL INJECTION
-    const allowedSortFields = ["id", "action", "status", "createdAt"];
-    const allowedSortOrder = ["asc", "desc"];
-
-    if (!allowedSortFields.includes(sortBy)) {
-      sortBy = "createdAt";
-    }
-
-    if (!allowedSortOrder.includes(sortOrder.toLowerCase())) {
-      sortOrder = "desc";
-    }
-
     // THỰC THI QUERY TỪ DATABASE
     const { count, rows } = await Action.findAndCountAll({
       where,
@@ -264,7 +214,7 @@ const searchActions = async (req, res, next) => {
           required: Object.keys(deviceWhere).length > 0,
         },
       ],
-      order: [[sortBy, sortOrder.toUpperCase()]],
+      order: orderClause,
       limit: pageSize,
       offset,
       distinct: true,

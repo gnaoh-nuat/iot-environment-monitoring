@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle, XCircle, Clock3 } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle, XCircle, Clock3 } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
 import Pagination from "../components/Pagination";
@@ -80,6 +80,8 @@ export default function ActionHistory() {
   const [filterDevice, setFilterDevice] = useState("all");
   const [filterAction, setFilterAction] = useState("all");
   const [filterStatusGroup, setFilterStatusGroup] = useState("all");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -118,13 +120,13 @@ export default function ActionHistory() {
           params: {
             pageNo: currentPage,
             pageSize,
-            sortBy: "createdAt",
-            sortOrder: "desc",
             deviceName: filterDevice === "all" ? undefined : filterDevice,
             action: filterAction === "all" ? undefined : filterAction,
             statusGroup:
               filterStatusGroup === "all" ? undefined : filterStatusGroup,
             q: searchTerm.trim() || undefined,
+            sortBy,
+            sortOrder,
           },
         });
 
@@ -156,6 +158,8 @@ export default function ActionHistory() {
       filterStatusGroup,
       pageSize,
       searchTerm,
+      sortBy,
+      sortOrder,
     ],
   );
 
@@ -201,6 +205,63 @@ export default function ActionHistory() {
     if (shouldResetPage) {
       setCurrentPage(1);
     }
+  };
+
+  const handleSortToggle = (columnKey) => {
+    if (sortBy === columnKey) {
+      setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+      setCurrentPage(1);
+      return;
+    }
+
+    setSortBy(columnKey);
+    setSortOrder(columnKey === "createdAt" ? "desc" : "asc");
+    setCurrentPage(1);
+  };
+
+  const renderSortHeader = (
+    label,
+    columnKey,
+    thClassName = "",
+    buttonClassName = "",
+  ) => {
+    const isActive = sortBy === columnKey;
+
+    return (
+      <th className={`px-6 py-4 font-semibold ${thClassName}`}>
+        <button
+          type="button"
+          onClick={() => handleSortToggle(columnKey)}
+          className={`group flex items-center gap-1.5 font-semibold transition-colors focus:outline-none ${
+            isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-600"
+          } ${buttonClassName}`}
+          title={
+            isActive
+              ? sortOrder === "desc"
+                ? "Đang sắp xếp giảm dần"
+                : "Đang sắp xếp tăng dần"
+              : `Sắp xếp theo ${label}`
+          }
+        >
+          {label}
+          <span
+            className={`p-1 rounded transition-colors ${
+              isActive ? "bg-blue-50" : "bg-gray-100 group-hover:bg-gray-200"
+            }`}
+          >
+            {isActive ? (
+              sortOrder === "asc" ? (
+                <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+              ) : (
+                <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+              )
+            ) : (
+              <ArrowDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400" />
+            )}
+          </span>
+        </button>
+      </th>
+    );
   };
 
   const totalPages = Math.max(1, pagination.totalPages || 1);
@@ -338,11 +399,16 @@ export default function ActionHistory() {
         <table className="w-full text-sm text-left">
           <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-4 font-semibold">ID</th>
-              <th className="px-6 py-4 font-semibold">Thiết bị</th>
-              <th className="px-6 py-4 font-semibold text-center">Hành động</th>
-              <th className="px-6 py-4 font-semibold">Thời gian</th>
-              <th className="px-6 py-4 font-semibold">Trạng thái</th>
+              {renderSortHeader("ID", "id")}
+              {renderSortHeader("Thiết bị", "deviceName")}
+              {renderSortHeader(
+                "Hành động",
+                "action",
+                "text-center",
+                "mx-auto",
+              )}
+              {renderSortHeader("Thời gian", "createdAt")}
+              {renderSortHeader("Trạng thái", "status")}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
