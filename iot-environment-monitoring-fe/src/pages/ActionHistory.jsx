@@ -264,8 +264,6 @@ export default function ActionHistory() {
     );
   };
 
-  const totalPages = Math.max(1, pagination.totalPages || 1);
-
   const deviceSelectOptions = [
     { value: "all", label: "Tất cả thiết bị" },
     ...deviceOptions.map((device) => ({

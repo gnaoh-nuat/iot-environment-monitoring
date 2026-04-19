@@ -9,7 +9,7 @@ class ErrorBoundary extends Component {
     this.state = { hasError: false, error: null, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 
@@ -40,7 +40,7 @@ class ErrorBoundary extends Component {
               refreshing the page.
             </p>
 
-            {process.env.NODE_ENV === "development" && (
+            {import.meta.env.DEV && (
               <details className="mb-6 text-sm">
                 <summary className="cursor-pointer text-slate-500 hover:text-slate-700 font-medium">
                   Error Details

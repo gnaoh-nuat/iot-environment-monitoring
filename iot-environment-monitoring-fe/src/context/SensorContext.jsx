@@ -1,10 +1,9 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { SensorContext } from "./SensorContextStore";
 
 /**
  * Context để quản lý dữ liệu sensor
  */
-const SensorContext = createContext();
-
 export const SensorProvider = ({ children }) => {
   // Sensors list
   const [sensors, setSensors] = useState([
@@ -117,15 +116,4 @@ export const SensorProvider = ({ children }) => {
   return (
     <SensorContext.Provider value={value}>{children}</SensorContext.Provider>
   );
-};
-
-/**
- * Hook để sử dụng SensorContext
- */
-export const useSensorContext = () => {
-  const context = useContext(SensorContext);
-  if (!context) {
-    throw new Error("useSensorContext must be used within SensorProvider");
-  }
-  return context;
 };

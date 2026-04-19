@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import api from "../services/api";
-import { API_STATUS, ERROR_MESSAGES, HTTP_STATUS } from "../constants/api";
+import { API_STATUS, ERROR_MESSAGES } from "../constants/api";
 
 /**
  * Custom hook để gọi API
@@ -106,21 +106,25 @@ export const useApi = (endpoint, options = {}) => {
  */
 export const useApiFetch = (endpoint, options = {}) => {
   const { immediate = true, params = {}, onSuccess, onError } = options;
-  const api_hook = useApi(endpoint, {
+  const apiHook = useApi(endpoint, {
     method: "GET",
     params,
     onSuccess,
     onError,
   });
-
-  const [mounted, setMounted] = useState(false);
+  const hasFetchedRef = useRef(false);
+  const { execute } = apiHook;
 
   useEffect(() => {
-    if (immediate && !mounted) {
-      api_hook.execute();
-      setMounted(true);
+    if (!immediate || hasFetchedRef.current) {
+      return;
     }
-  }, []);
 
-  return api_hook;
+    hasFetchedRef.current = true;
+    execute().catch(() => {
+      // Errors are already stored in hook state and passed to onError.
+    });
+  }, [immediate, execute]);
+
+  return apiHook;
 };

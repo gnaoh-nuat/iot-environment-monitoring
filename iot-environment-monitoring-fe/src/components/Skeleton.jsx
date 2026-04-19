@@ -13,6 +13,8 @@ export const Skeleton = ({
   );
 };
 
+const CHART_BAR_HEIGHTS = ["h-6", "h-10", "h-14", "h-16", "h-12"];
+
 /**
  * Card Skeleton - loading state for cards
  */
@@ -65,7 +67,7 @@ export const ChartSkeleton = () => {
           <div key={i} className="flex items-end gap-2 h-20">
             <Skeleton
               width="w-full"
-              height={`h-${Math.floor(Math.random() * 16) + 4}`}
+              height={CHART_BAR_HEIGHTS[i % CHART_BAR_HEIGHTS.length]}
             />
           </div>
         ))}

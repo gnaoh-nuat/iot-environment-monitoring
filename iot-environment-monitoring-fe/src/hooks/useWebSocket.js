@@ -19,6 +19,7 @@ export const useWebSocket = (url, options = {}) => {
   const reconnectCountRef = useRef(0);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const connectRef = useRef(null);
 
   const connect = useCallback(() => {
     try {
@@ -39,7 +40,7 @@ export const useWebSocket = (url, options = {}) => {
         try {
           const message = JSON.parse(event.data);
           setData(message);
-        } catch (e) {
+        } catch {
           // If not JSON, store raw data
           setData(event.data);
         }
@@ -57,7 +58,11 @@ export const useWebSocket = (url, options = {}) => {
         // Attempt to reconnect
         if (reconnect && reconnectCountRef.current < maxReconnectAttempts) {
           reconnectCountRef.current += 1;
-          reconnectTimeoutRef.current = setTimeout(connect, reconnectInterval);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (connectRef.current) {
+              connectRef.current();
+            }
+          }, reconnectInterval);
         }
       };
 
@@ -90,12 +95,19 @@ export const useWebSocket = (url, options = {}) => {
   }, []);
 
   useEffect(() => {
-    connect();
+    connectRef.current = connect;
+  }, [connect]);
+
+  useEffect(() => {
+    const connectTimer = setTimeout(() => {
+      connect();
+    }, 0);
 
     return () => {
+      clearTimeout(connectTimer);
       disconnect();
     };
-  }, [url, connect, disconnect]);
+  }, [connect, disconnect]);
 
   return {
     data,
