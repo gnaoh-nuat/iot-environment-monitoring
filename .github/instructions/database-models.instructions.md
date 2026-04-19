@@ -1,62 +1,63 @@
 ---
 description: "Use when defining Sequelize models, setting up associations, or writing database queries. Ensures proper foreign keys, eager loading, and cascade behaviors."
-applyTo: "iot-environment-monitoring-be/models/**/*.js"
+applyTo:
+  - "iot-environment-monitoring-be/models/**/*.js"
+  - "iot-environment-monitoring-be/controllers/**/*.js"
 ---
 
 # Database Models (Sequelize)
 
+## Project-Specific Naming (Important)
+
+This repository uses file names and model names that are not fully uniform:
+
+- `models/Sensor.js` defines model `Sensor`, table `sensors`
+- `models/Device.js` defines model `Device`, table `devices`
+- `models/SensorData.js` defines model `DataSensor`, table `SensorData`
+- `models/ActionHistory.js` defines model `Action`, table `ActionHistory`
+
+Do not rename model/table identifiers casually. Keep compatibility with existing queries and includes.
+
 ## Model Definition Template
 
 ```javascript
-// iot-environment-monitoring-be/models/Sensor.js
-module.exports = (sequelize, DataTypes) => {
-  const Sensor = sequelize.define(
-    "Sensor",
-    {
-      id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true,
-      },
-      name: {
-        type: DataTypes.STRING(100),
-        allowNull: false,
-        unique: true,
-      },
-      type: {
-        type: DataTypes.ENUM("temperature", "humidity", "light"),
-        allowNull: false,
-      },
-      unit: {
-        type: DataTypes.STRING(20),
-        defaultValue: "C", // Celsius, %, Lux, etc.
-      },
-      deviceId: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-          model: "Device",
-          key: "id",
-        },
-        onDelete: "CASCADE",
-      },
-    },
-    {
-      timestamps: true, // Adds createdAt, updatedAt
-      tableName: "sensors",
-    },
-  );
+// iot-environment-monitoring-be/models/SensorData.js
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-  return Sensor;
-};
+const DataSensor = sequelize.define(
+  "DataSensor",
+  {
+    id: {
+      type: DataTypes.BIGINT,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    sensorId: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      field: "sensor_id",
+    },
+    value: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+  },
+  {
+    tableName: "SensorData",
+    timestamps: true,
+  },
+);
+
+module.exports = DataSensor;
 ```
 
 ### Rules
 
-- **Use snake_case** in database column names (`device_id`, not `deviceId`)
-- **Sequelize automatically creates camelCase accessors** (`sensor.deviceId` in code)
+- **Use camelCase model attributes** (`sensorId`, `deviceId`) and map DB columns via `field` when needed.
+- **Keep existing `tableName` values unchanged** unless you are doing a planned migration.
 - **Always set `timestamps: true`** (createdAt, updatedAt tracked automatically)
-- **Use `ENUM`** for fixed choices (sensor types, device statuses)
+- **Use `ENUM` only when the model truly needs fixed value constraints**
 - **Set `allowNull: false`** for required fields
 - **Use `unique: true`** for naturally unique fields (sensor name, email)
 
@@ -66,47 +67,41 @@ module.exports = (sequelize, DataTypes) => {
 
 ```javascript
 // iot-environment-monitoring-be/models/associations.js
-module.exports = (models) => {
-  const { Device, Sensor, SensorData, ActionHistory } = models;
-
-  // Device (1) ──── (n) Sensor
-  Device.hasMany(Sensor, {
-    foreignKey: "deviceId",
-    as: "sensorList", // Alias for includes
-    onDelete: "CASCADE",
-  });
-  Sensor.belongsTo(Device, {
-    foreignKey: "deviceId",
-    as: "deviceInfo",
-  });
-
-  // Sensor (1) ──── (n) SensorData
+if (!Sensor.associations.dataLogs) {
   Sensor.hasMany(SensorData, {
     foreignKey: "sensorId",
-    as: "sensorData",
+    as: "dataLogs",
     onDelete: "CASCADE",
   });
+}
+
+if (!SensorData.associations.sensorInfo) {
   SensorData.belongsTo(Sensor, {
     foreignKey: "sensorId",
     as: "sensorInfo",
   });
+}
 
-  // Device (1) ──── (n) ActionHistory
+if (!Device.associations.actionLogs) {
   Device.hasMany(ActionHistory, {
     foreignKey: "deviceId",
-    as: "actionHistory",
+    as: "actionLogs",
     onDelete: "CASCADE",
   });
+}
+
+if (!ActionHistory.associations.deviceInfo) {
   ActionHistory.belongsTo(Device, {
     foreignKey: "deviceId",
     as: "deviceInfo",
   });
-};
+}
 ```
 
 ### Rules
 
-- **Use `as` alias consistently**: Frontend/controllers reference this (`include: { as: 'sensorList' }`)
+- **Use `as` alias consistently**: queries rely on exact alias names.
+- **Keep idempotent guards** (`if (!Model.associations.alias)`) to avoid duplicate association errors during hot reload.
 - **Match `foreignKey` to model attribute**: If model has `deviceId`, use `foreignKey: 'deviceId'`
 - **Set `onDelete: 'CASCADE'` for cascading deletes**: Deleting parent also deletes children
 - **Both sides of relationship**: `hasMany` + `belongsTo` on both models
@@ -118,12 +113,12 @@ module.exports = (models) => {
 ```javascript
 // Include related data using the 'as' alias
 const devices = await Device.findAll({
-  include: { association: "sensorList", required: false },
-  // 'sensorList' matches the 'as' in associations.js
+  include: { association: "actionLogs", required: false },
+  // 'actionLogs' matches the 'as' in associations.js
   order: [["createdAt", "DESC"]],
 });
 
-// Result: { id, name, sensorList: [ { id, name, type }, ... ] }
+// Result: { id, name, actionLogs: [ { id, action, status }, ... ] }
 ```
 
 ### ❌ Wrong
@@ -131,11 +126,11 @@ const devices = await Device.findAll({
 ```javascript
 // Raw SQL or querying separately (inefficient/inconsistent)
 const devices = await Device.findAll();
-const sensors = await Sensor.findAll({ where: { deviceId: devices[0].id } });
+const actions = await Action.findAll({ where: { deviceId: devices[0].id } });
 
 // Or: Wrong alias name
 const devices = await Device.findAll({
-  include: { as: "sensors" }, // Should be 'sensorList'
+  include: { as: "actions" }, // Should be 'actionLogs'
 });
 ```
 
@@ -143,31 +138,31 @@ const devices = await Device.findAll({
 
 ```javascript
 const {
-  page = 1,
-  limit = 10,
+  pageNo = 1,
+  pageSize = 10,
   sensorId,
   startDate,
   endDate,
-  sort = "DESC",
+  sortOrder = "DESC",
 } = req.query;
-const offset = (page - 1) * limit;
+const offset = (pageNo - 1) * pageSize;
 
 // Build WHERE clause
 const where = {};
 if (sensorId) where.sensorId = parseInt(sensorId);
 if (startDate && endDate) {
   where.createdAt = {
-    [sequelize.Op.between]: [new Date(startDate), new Date(endDate)],
+    [Op.between]: [new Date(startDate), new Date(endDate)],
   };
 }
 
 // Query with pagination
 const { count, rows } = await SensorData.findAndCountAll({
   where,
-  include: { association: "sensorInfo", required: false },
+  include: { association: "sensorInfo", required: true },
   offset,
-  limit: parseInt(limit),
-  order: [["createdAt", sort === "ASC" ? "ASC" : "DESC"]],
+  limit: parseInt(pageSize, 10),
+  order: [["createdAt", sortOrder === "ASC" ? "ASC" : "DESC"]],
   distinct: true, // Important for accurate count with includes
   subQuery: false, // Avoid subquery issues
 });
@@ -177,10 +172,10 @@ res.json({
   success: true,
   data: rows,
   pagination: {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    total: count,
-    pages: Math.ceil(count / limit),
+    totalRecords: count,
+    totalPages: Math.ceil(count / pageSize),
+    currentPage: parseInt(pageNo, 10),
+    pageSize: parseInt(pageSize, 10),
   },
   message: `Retrieved ${rows.length} records`,
 });
@@ -199,21 +194,20 @@ res.json({
 ### Create with Validation
 
 ```javascript
-const { name, type, deviceId } = req.body;
+const { name } = req.body;
 
 // Validate presence
-if (!name || !type || !deviceId) {
-  throw new AppError("name, type, and deviceId are required", 400);
+if (!name) {
+  throw new AppError(400, "Sensor name is required");
 }
 
-// Validate foreign key exists
-const device = await Device.findByPk(deviceId);
-if (!device) {
-  throw new AppError("Device not found", 404);
+const existed = await Sensor.findOne({ where: { name } });
+if (existed) {
+  throw new AppError(400, "Sensor already exists");
 }
 
 // Create
-const sensor = await Sensor.create({ name, type, deviceId });
+const sensor = await Sensor.create({ name });
 res
   .status(201)
   .json({ success: true, data: sensor, message: "Sensor created" });
@@ -223,15 +217,24 @@ res
 
 ```javascript
 const { id } = req.params;
-const { name, type } = req.body;
+const { name } = req.body;
 
 const sensor = await Sensor.findByPk(id);
 if (!sensor) {
-  throw new AppError("Sensor not found", 404);
+  throw new AppError(404, "Sensor not found");
+}
+
+if (!name) {
+  throw new AppError(400, "Sensor name is required");
+}
+
+const existed = await Sensor.findOne({ where: { name } });
+if (existed && existed.id !== sensor.id) {
+  throw new AppError(400, "Sensor name already exists");
 }
 
 // Update only provided fields
-await sensor.update({ name, type });
+await sensor.update({ name });
 res.json({ success: true, data: sensor, message: "Sensor updated" });
 ```
 
@@ -256,10 +259,10 @@ await Sensor.findAll({ paranoid: false });
 
 **Checklist before submitting code:**
 
-- [ ] Model uses snake_case columns (sequelize auto-creates camelCase accessors)
+- [ ] Model attributes stay camelCase; DB column mapping uses `field` when needed
 - [ ] Associations defined in `models/associations.js`, not in models
 - [ ] Use `as` aliases matching Swagger/controller includes
 - [ ] Foreign key names match actual model attributes
 - [ ] Eager loading uses `include: { association: 'alias' }`
 - [ ] Pagination queries use `findAndCountAll` with `distinct: true`
-- [ ] All mutations throw `AppError` for validation failures
+- [ ] All mutations throw `AppError(statusCode, message)` for validation failures

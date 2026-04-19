@@ -5,6 +5,13 @@ applyTo: "iot-environment-monitoring-fe/src/**/*.{jsx,js}"
 
 # Frontend React Components
 
+## Project Defaults
+
+- Use functional components only.
+- Prefer single quotes and semicolons in JS/JSX.
+- Prefer Tailwind utility classes for styling.
+- Reuse existing shared UI (`components/filters`, `Pagination`, `Skeleton`) before creating new components.
+
 ## Component Structure
 
 **Always use functional components with hooks. No class components.**
@@ -13,15 +20,27 @@ applyTo: "iot-environment-monitoring-fe/src/**/*.{jsx,js}"
 
 ```javascript
 import { useState, useEffect } from "react";
-import { useApi } from "../hooks/useApi";
-import "./ComponentName.css"; // Scoped styles if needed (prefer Tailwind)
+import api from "../services/api";
 
 export default function ComponentName({ title, onClose }) {
   const [state, setState] = useState(null);
-  const { data, loading, error } = useApi(`/api/endpoint`);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Setup side effects here
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get("/api/endpoint");
+        setState(response?.data ?? null);
+      } catch (requestError) {
+        setError(requestError.message || "Request failed");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [dependencies]);
 
   return <div className="p-4 bg-white rounded-lg shadow">{/* JSX */}</div>;
@@ -34,6 +53,7 @@ export default function ComponentName({ title, onClose }) {
 - Props at top, destructured
 - Hooks before rendering logic
 - Comments for complex logic only (self-documenting code preferred)
+- Keep render logic pure (avoid `Math.random()`, `Date.now()` directly in render path)
 
 ## Hook Dependencies (Critical)
 
@@ -67,6 +87,7 @@ useEffect(() => {
 
 - **List all external variables** used inside `useEffect` in dependencies
 - **Stable references**: Avoid passing object/array literals as dependencies
+- Avoid setting component state synchronously in mount-only effects unless truly needed
 
   ```javascript
   // ❌ Wrong: config recreated on every render
@@ -83,22 +104,29 @@ useEffect(() => {
 
 - **Use ESLint rule**: `react-hooks/exhaustive-deps` catches violations
 
-## Custom Hooks (useApi, useWebSocket)
+## Custom Hooks (useApi, useSensorSocket)
 
 ### useApi Pattern
 
 ```javascript
 // Usage in component
-const { data, loading, error } = useApi(`/sensors`, [pageNum]);
-// Hook refetches when pageNum changes
+const { data, loading, error, execute } = useApi("/sensors", {
+  method: "GET",
+  params: { pageNo: 1, pageSize: 10 },
+});
+
+useEffect(() => {
+  execute();
+}, [execute]);
 ```
 
-### useWebSocket Pattern
+### useSensorSocket Pattern
 
 ```javascript
 // Usage in component
-const { eventData, connected } = useWebSocket("sensor-update");
-// Listens on 'sensor-update' socket event
+const { connected, lastSensorPacket, lastDevicePacket, error } =
+  useSensorSocket();
+// Uses shared Socket.io connection and listens to env-configured events
 ```
 
 **Don't duplicate these**—reuse from `hooks/` folder when possible.
@@ -124,6 +152,8 @@ export default function Dashboard() {
 ```
 
 **Rule**: Local state for UI (modals, tabs, filters). Context for shared data (sensor list, device list).
+
+When adding long-lived shared state, prefer updating `SensorContext` over introducing a second global store.
 
 ## TailwindCSS Styling
 
@@ -219,6 +249,11 @@ if (error) return <ErrorBoundary error={error} />;
 const { data, error } = useApi("/sensors");
 if (error) return <div className="text-red-600">{error.message}</div>;
 ```
+
+Note: `services/api.js` returns response body directly (Axios interceptor).
+
+- Direct service call (`api.get`) usually reads `response.data` for business payload.
+- `useApi` returns the full response body in `data` state.
 
 ---
 

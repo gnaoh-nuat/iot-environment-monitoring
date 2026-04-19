@@ -4,24 +4,32 @@ applyTo:
   [
     "iot-environment-monitoring-be/socket/**/*.js",
     "iot-environment-monitoring-be/mqtt/**/*.js",
+    "iot-environment-monitoring-fe/src/hooks/useSensorSocket.js",
     "iot-environment-monitoring-fe/src/hooks/useWebSocket.js",
   ]
 ---
 
 # Real-Time Integration (Socket.io & MQTT)
 
+## Current Runtime Sources
+
+- MQTT broker host/port are read from `.env` (`MQTT_HOST`, `MQTT_PORT`).
+- Sensor topics are comma-separated via `MQTT_TOPIC`.
+- Backend emits Socket.io events from env (`SOCKET_SENSOR_TOPIC`, `SOCKET_DEVICE_TOPIC`).
+- Frontend listens with `VITE_SOCKET_URL`, `VITE_SOCKET_SENSOR_EVENT`, `VITE_SOCKET_DEVICE_EVENT`.
+
 ## Data Flow Architecture
 
 ```
 IoT Devices (MQTT)
     ↓
-MQTT Broker (mqtt://localhost:1883)
+MQTT Broker (env-driven host:port)
     ↓
 Backend MQTT Client (mqtt/mqttClient.js)
     ↓ Subscribe & Parse
 Database Update (PostgreSQL)
     ↓ Socket.io Emit
-Frontend WebSocket Listener (useWebSocket.js)
+Frontend Socket.io Listener (useSensorSocket.js)
     ↓
 React Component (setState triggers re-render)
 ```
@@ -34,14 +42,22 @@ React Component (setState triggers re-render)
 // iot-environment-monitoring-be/mqtt/mqttClient.js
 const mqtt = require("mqtt");
 
-const client = mqtt.connect("mqtt://localhost:1883", {
-  clientId: "iot-backend-" + Math.random().toString(16).slice(2),
+const host = process.env.MQTT_HOST || "localhost";
+const port = process.env.MQTT_PORT || 2708;
+const sensorTopics = (process.env.MQTT_TOPIC || "sensor/data,sensors/data")
+  .split(",")
+  .map((topic) => topic.trim())
+  .filter(Boolean);
+
+const client = mqtt.connect(`mqtt://${host}:${port}`, {
+  username: process.env.MQTT_USERNAME,
+  password: process.env.MQTT_PASSWORD,
   reconnectPeriod: 5000,
 });
 
 client.on("connect", () => {
-  console.log("✓ MQTT connected");
-  client.subscribe("sensors/+/data", (err) => {
+  console.log("[MQTT] connected");
+  client.subscribe(sensorTopics, (err) => {
     if (err) console.error(err);
   });
 });
@@ -49,27 +65,20 @@ client.on("connect", () => {
 client.on("message", async (topic, message) => {
   try {
     const payload = JSON.parse(message.toString());
-    // payload: { sensorId, value, unit, timestamp }
+    // payload parsing and DB write
 
-    // Save to database
-    await SensorData.create({
-      sensorId: payload.sensorId,
-      value: payload.value,
-    });
-
-    // Emit to frontend
-    io.emit("sensor-data-received", {
-      sensorId: payload.sensorId,
-      value: payload.value,
-      timestamp: new Date(),
+    emitSensorData(process.env.SOCKET_SENSOR_TOPIC || "sensor-data", {
+      topic,
+      timestamp: payload.timestamp || new Date().toISOString(),
+      readings: [],
     });
   } catch (error) {
-    console.error("MQTT parse error:", error);
+    console.error("[MQTT] parse error:", error);
   }
 });
 
 client.on("error", (error) => {
-  console.error("MQTT error:", error);
+  console.error("[MQTT] error:", error);
   // Reconnect handled by reconnectPeriod
 });
 
@@ -79,7 +88,7 @@ module.exports = client;
 ### Rules
 
 - **Topic naming**: Use forward slashes for hierarchy (`sensors/123/data`, `devices/456/status`)
-- **Wildcard subscriptions**: `+` matches one level, `#` matches all remaining
+- **Topic list support**: Keep `MQTT_TOPIC` as comma-separated values and trim whitespace.
 - **Always wrap in try-catch**: MQTT messages may have invalid JSON
 - **Parse and validate** before saving to database
 - **Emit to Socket.io after database save** (frontend sees confirmed data)
@@ -90,127 +99,108 @@ module.exports = client;
 
 ```javascript
 // iot-environment-monitoring-be/socket/socketHandler.js
-const initializeSocket = (io) => {
+let ioRef = null;
+
+function initSocket(server) {
+  const io = require("socket.io")(server, {
+    cors: { origin: "*" },
+  });
+
   io.on("connection", (socket) => {
-    console.log(`✓ Client connected: ${socket.id}`);
-
-    // Listen for device control commands from frontend
-    socket.on("control-device", async (payload) => {
-      try {
-        const { deviceId, action, value } = payload;
-
-        // Validate & execute
-        const device = await Device.findByPk(deviceId);
-        if (!device) {
-          socket.emit("control-error", { error: "Device not found" });
-          return;
-        }
-
-        // Publish to MQTT (device listens and acts)
-        mqttClient.publish(
-          `devices/${deviceId}/control`,
-          JSON.stringify({ action, value }),
-          { retain: false },
-        );
-
-        // Broadcast control event to all clients
-        io.emit("control-executed", {
-          deviceId,
-          action,
-          value,
-          timestamp: new Date(),
-        });
-      } catch (error) {
-        socket.emit("control-error", { error: error.message });
-      }
-    });
+    console.log(`[Socket.io] Frontend connected: ${socket.id}`);
 
     socket.on("disconnect", () => {
-      console.log(`✓ Client disconnected: ${socket.id}`);
+      console.log(`[Socket.io] Frontend disconnected: ${socket.id}`);
     });
   });
-};
 
-module.exports = initializeSocket;
+  ioRef = io;
+  return io;
+}
+
+function emitSensorData(topic, data) {
+  if (ioRef) {
+    ioRef.emit(topic, data);
+  }
+}
+
+module.exports = { initSocket, emitSensorData };
 ```
 
 ### Event Naming Conventions
 
-- **To frontend**: `sensor-data-received`, `control-executed`, `device-status-changed`
-- **From frontend**: `control-device`, `subscribe-device`, `get-history`
-- **Errors**: `control-error`, `connection-error`
-- **Pattern**: Action-Object format (kebab-case): `verb-noun`
+- Sensor stream default: `sensor-data`
+- Device stream default: `device-status`
+- Read event names from env first, then fallback to defaults
+- Keep topic names kebab-case and stable
 
 ### Rules
 
-- **Validate all incoming events** (check deviceId, action, etc.)
-- **Emit errors back** to socket, not throw
-- **Broadcast vs Send**: Use `io.emit()` to all clients, `socket.emit()` to one
-- **Never trust client input**: Verify device ownership/permissions (even though auth is disabled)
+- Use `emitSensorData(topic, payload)` helper from `socketHandler.js`.
+- Ensure `actionId`, `deviceId` are number-like when sending device-status payloads.
+- Emit stale/timeout/failure states explicitly so frontend can reconcile UI state.
 
 ## Frontend: Socket.io Listener Hook
 
-### useWebSocket Pattern
+### useSensorSocket Pattern
 
 ```javascript
-// iot-environment-monitoring-fe/src/hooks/useWebSocket.js
+// iot-environment-monitoring-fe/src/hooks/useSensorSocket.js
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-export const useWebSocket = (eventName) => {
-  const [eventData, setEventData] = useState(null);
+const SENSOR_EVENT = import.meta.env.VITE_SOCKET_SENSOR_EVENT || "sensor-data";
+const DEVICE_EVENT =
+  import.meta.env.VITE_SOCKET_DEVICE_EVENT || "device-status";
+
+export const useSensorSocket = () => {
   const [connected, setConnected] = useState(false);
+  const [lastSensorPacket, setLastSensorPacket] = useState(null);
+  const [lastDevicePacket, setLastDevicePacket] = useState(null);
 
   useEffect(() => {
-    const socket = io("http://localhost:5000", {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5,
-    });
+    const socket = io(
+      import.meta.env.VITE_SOCKET_URL || "http://localhost:5000",
+      {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+      },
+    );
 
     socket.on("connect", () => {
-      console.log("✓ WebSocket connected");
       setConnected(true);
     });
 
-    socket.on(eventName, (data) => {
-      console.log(`✓ Event received: ${eventName}`, data);
-      setEventData(data);
-    });
+    socket.on(SENSOR_EVENT, (packet) => setLastSensorPacket(packet));
+    socket.on(DEVICE_EVENT, (packet) => setLastDevicePacket(packet));
 
     socket.on("disconnect", () => {
-      console.log("✗ WebSocket disconnected");
       setConnected(false);
     });
 
     return () => socket.disconnect();
-  }, [eventName]);
+  }, []);
 
-  return { eventData, connected };
+  return { connected, lastSensorPacket, lastDevicePacket };
 };
 ```
 
 ### Usage in Component
 
 ```javascript
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useSensorSocket } from "../hooks/useSensorSocket";
 
 export default function Dashboard() {
-  const { eventData: newSensorData } = useWebSocket("sensor-data-received");
+  const { lastSensorPacket } = useSensorSocket();
 
   useEffect(() => {
-    if (newSensorData) {
+    if (lastSensorPacket?.readings) {
       // Updated in real-time when MQTT data arrives
-      setSensors((prev) =>
-        prev.map((s) =>
-          s.id === newSensorData.sensorId
-            ? { ...s, latestValue: newSensorData.value }
-            : s,
-        ),
-      );
+      // map readings to UI state
     }
-  }, [newSensorData]);
+  }, [lastSensorPacket]);
 
   return <Dashboard data={sensors} />;
 }
@@ -218,38 +208,32 @@ export default function Dashboard() {
 
 ### Rules
 
-- **One event per hook**: Don't try to listen to multiple events
-- **Cleanup on unmount**: Return unsubscribe function
-- **Handle disconnection gracefully**: Show UI indicator when `connected === false`
-- **Dependency array**: Only `[eventName]` (socket creates/destroys on change)
+- Prefer shared socket lifecycle to avoid opening multiple redundant connections.
+- Register and unregister listeners in cleanup.
+- Keep connection status in UI (`connected` + `error`).
+- Do not hard-code event names when env variables already define them.
 
-## Emitting Events from Frontend to Backend
+## Device Control Flow (Current Project Pattern)
 
 ```javascript
-// In component, send control command
-const handleDeviceControl = async (deviceId, action) => {
-  const socket = io("http://localhost:5000");
-  socket.emit("control-device", { deviceId, action, value: "on" });
+// Frontend calls REST API instead of emitting socket command directly
+await api.post("/actions/control", {
+  deviceId,
+  action: "ON",
+});
 
-  // Listen for response
-  socket.on("control-executed", (data) => {
-    console.log("Control successful:", data);
-    showNotification("Device controlled successfully");
-  });
-
-  socket.on("control-error", (error) => {
-    console.error("Control failed:", error);
-    showError(error.error);
-  });
-};
+// Backend will:
+// 1) Create pending action in DB
+// 2) Publish MQTT command
+// 3) Emit socket updates on device-status topic
 ```
 
 ### Rules
 
-- **Emit after validation on frontend** (don't trust backend to validate everything)
-- **Wait for response**: Always listen for success/error events
-- **Timeout handling**: Implement timeout if backend doesn't respond
-- **Log all events**: Help debugging real-time issues
+- Validate action input on frontend (`ON` / `OFF`) before calling API.
+- Keep socket listeners passive for status updates; do not open one-off sockets for commands.
+- Handle `PENDING`, `ON`, `OFF`, `FAILED`, `TIMEOUT` states in UI.
+- Always rely on socket status events for final state reconciliation.
 
 ## Message Format Standards
 
@@ -258,40 +242,44 @@ const handleDeviceControl = async (deviceId, action) => {
 ```javascript
 // MQTT payload from device
 {
-  sensorId: 1,
-  value: 25.5,
-  unit: "C",
-  timestamp: "2024-04-13T10:30:00Z"
+  temp: 25.5,
+  hum: 60,
+  lux: 300,
+  timestamp: '2024-04-13T10:30:00Z'
 }
 
 // Backend Socket.io emission
-socket.emit('sensor-data-received', {
-  sensorId: 1,
-  value: 25.5,
-  timestamp: new Date().toISOString()
+io.emit('sensor-data', {
+  topic: 'sensor/data',
+  timestamp: '2024-04-13T10:30:00Z',
+  readings: [
+    { name: 'temperature', value: 25.5, unit: '°C', sensorId: 1, dataId: 10 },
+  ],
 });
 ```
 
-### Control Event (Frontend → Backend → MQTT → Device)
+### Control Event (Frontend REST → Backend → MQTT → Socket)
 
 ```javascript
-// Frontend emission
-socket.emit("control-device", {
+// Frontend REST request
+await api.post("/actions/control", {
   deviceId: 5,
-  action: "power",
-  value: "on",
+  action: "ON",
 });
 
-// Backend publishes to MQTT
-mqttClient.publish(
-  "devices/5/control",
-  JSON.stringify({
-    action: "power",
-    value: "on",
-    timestamp: Date.now(),
-  }),
-);
+// Backend MQTT publish payload
+publishCommand({
+  actionId: 123,
+  deviceId: 5,
+  action: "ON",
+  timestamp: new Date().toISOString(),
+});
 ```
+
+Current flow in this codebase:
+
+- Frontend calls `POST /actions/control`.
+- Backend persists pending action, publishes MQTT command, and emits socket updates.
 
 ## Error Handling & Reconnection
 
@@ -318,7 +306,7 @@ const publishToMQTT = (topic, message) => {
 
 ```javascript
 export default function Dashboard() {
-  const { connected } = useWebSocket("sensor-data-received");
+  const { connected } = useSensorSocket();
 
   return (
     <div>
@@ -335,11 +323,11 @@ export default function Dashboard() {
 
 **Checklist before submitting code:**
 
-- [ ] MQTT subscription uses proper topic hierarchy (`sensors/+/data`)
+- [ ] MQTT subscription uses env-configured topic list (`MQTT_TOPIC`)
 - [ ] All MQTT messages wrapped in try-catch and JSON validated
-- [ ] Socket.io events follow verb-noun naming (kebab-case)
+- [ ] Socket.io event names are read from env with sane defaults
 - [ ] Backend emits to frontend AFTER database save (not before)
-- [ ] Frontend validates control commands before emitting to backend
-- [ ] useWebSocket cleanup function properly unsubscribes
+- [ ] Device status payload includes `actionId` for reconciliation
+- [ ] `useSensorSocket` cleanup function properly unsubscribes
 - [ ] Error events emitted and handled on both sides
 - [ ] Tested with backend and frontend both running

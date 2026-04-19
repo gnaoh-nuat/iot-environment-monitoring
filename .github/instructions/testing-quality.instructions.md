@@ -1,11 +1,18 @@
 ---
 description: "Use when writing tests, running linters, or enforcing code quality standards. Covers ESLint configuration, testing conventions, and pre-commit checks."
-applyTo: "iot-environment-monitoring-be/**/*.js"
-"iot-environment-monitoring-fe/src/**/*.{js,jsx}"
-  
+applyTo:
+  - "iot-environment-monitoring-be/**/*.js"
+  - "iot-environment-monitoring-fe/src/**/*.{js,jsx}"
 ---
 
 # Testing & Code Quality
+
+## Current Tooling Snapshot
+
+- Frontend has ESLint (`npm run lint`).
+- Backend currently has no ESLint script in `package.json`.
+- Automated unit/integration test runner is not configured yet.
+- API validation is mainly manual via Swagger/Postman/cURL.
 
 ## ESLint (Frontend)
 
@@ -16,6 +23,8 @@ cd iot-environment-monitoring-fe
 npm run lint    # Check for violations
 npm run lint -- --fix  # Auto-fix most issues
 ```
+
+On Windows PowerShell with execution-policy issues, run `npm.cmd run lint`.
 
 ### React-Specific Rules
 
@@ -51,6 +60,11 @@ Config: `iot-environment-monitoring-fe/eslint.config.js`
 - **Must pass** before commit (`npm run lint`)
 - **Use auto-fix** for formatting (semicolons, spacing)
 - **Manual fixes** for logic issues (unused imports, var→const)
+- For focused verification during local edits, use targeted lint:
+
+  ```bash
+  npx eslint src/pages/DataSensor.jsx
+  ```
 
 ## Backend Code Quality
 
@@ -61,6 +75,8 @@ Config: `iot-environment-monitoring-fe/eslint.config.js`
 - Async/await (not `.then()` chains)
 - Error handling: Always throw or pass errors to middleware
 
+When backend linting is introduced later, add it to this file and to `package.json` scripts.
+
 ### Testing Endpoints Manually (No Jest Setup Yet)
 
 #### Using Swagger UI
@@ -69,6 +85,8 @@ Config: `iot-environment-monitoring-fe/eslint.config.js`
 2. Open: `http://localhost:5000/api-docs`
 3. Click endpoint → "Try it out" → Add parameters → "Execute"
 4. Verify response format and HTTP status
+
+Also verify that Swagger docs match route/controller behavior after each endpoint change.
 
 #### Using Postman/Insomnia
 
@@ -126,6 +144,7 @@ npm run dev
 - [ ] API calls work (Network tab shows GET/POST requests)
 - [ ] Error states display (pass `error` prop or disconnect API)
 - [ ] No infinite loops (Frame rate normal, not dropping)
+- [ ] Real-time packets update UI as expected (`sensor-data`, `device-status`)
 
 #### Using React DevTools Browser Extension
 
@@ -177,6 +196,8 @@ npm run build
 # 3. Manual test: Run dev server, test in browser
 npm run dev
 ```
+
+On Windows PowerShell, replace `npm` with `npm.cmd` when needed.
 
 ## Performance Considerations
 
