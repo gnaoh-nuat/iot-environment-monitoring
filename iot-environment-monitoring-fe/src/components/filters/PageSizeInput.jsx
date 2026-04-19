@@ -1,7 +1,7 @@
 export default function PageSizeInput({ pageSize, onChange }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg bg-white">
-      <span className="text-sm text-gray-600">/trang</span>
+    <div className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-slate-300 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
+      <span className="text-sm font-medium text-slate-500">Hiển thị</span>
       <input
         type="number"
         min={1}
@@ -12,8 +12,9 @@ export default function PageSizeInput({ pageSize, onChange }) {
             onChange(parsedSize);
           }
         }}
-        className="w-16 text-sm font-medium text-gray-700 focus:outline-none"
+        className="w-8 text-sm font-bold text-slate-700 text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
+      <span className="text-sm font-medium text-slate-500">/ trang</span>
     </div>
   );
 }
