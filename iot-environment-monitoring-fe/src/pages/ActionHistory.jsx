@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle, XCircle, Clock3 } from "lucide-react";
+import { CheckCircle, XCircle, Clock3 } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
 import Pagination from "../components/Pagination";
 import SearchBar from "../components/filters/SearchBar";
 import FilterSelect from "../components/filters/FilterSelect";
 import PageSizeInput from "../components/filters/PageSizeInput";
+import SharedSortableTable from "../components/tables/SharedSortableTable";
 
 const formatDateTime = (value) => {
   if (!value) {
@@ -219,51 +220,6 @@ export default function ActionHistory() {
     setCurrentPage(1);
   };
 
-  const renderSortHeader = (
-    label,
-    columnKey,
-    thClassName = "",
-    buttonClassName = "",
-  ) => {
-    const isActive = sortBy === columnKey;
-
-    return (
-      <th className={`px-6 py-4 font-semibold ${thClassName}`}>
-        <button
-          type="button"
-          onClick={() => handleSortToggle(columnKey)}
-          className={`group flex items-center gap-1.5 font-semibold transition-colors focus:outline-none ${
-            isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-600"
-          } ${buttonClassName}`}
-          title={
-            isActive
-              ? sortOrder === "desc"
-                ? "Đang sắp xếp giảm dần"
-                : "Đang sắp xếp tăng dần"
-              : `Sắp xếp theo ${label}`
-          }
-        >
-          {label}
-          <span
-            className={`p-1 rounded transition-colors ${
-              isActive ? "bg-blue-50" : "bg-gray-100 group-hover:bg-gray-200"
-            }`}
-          >
-            {isActive ? (
-              sortOrder === "asc" ? (
-                <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
-              ) : (
-                <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-              )
-            ) : (
-              <ArrowDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400" />
-            )}
-          </span>
-        </button>
-      </th>
-    );
-  };
-
   const deviceSelectOptions = [
     { value: "all", label: "Tất cả thiết bị" },
     ...deviceOptions.map((device) => ({
@@ -283,6 +239,19 @@ export default function ActionHistory() {
     { value: "success", label: "Thành công" },
     { value: "failure", label: "Thất bại" },
     { value: "pending", label: "Đang chờ" },
+  ];
+
+  const tableColumns = [
+    { label: "ID", columnKey: "id" },
+    { label: "Thiết bị", columnKey: "deviceName" },
+    {
+      label: "Hành động",
+      columnKey: "action",
+      thClassName: "text-center",
+      buttonClassName: "mx-auto",
+    },
+    { label: "Trạng thái", columnKey: "status" },
+    { label: "Thời gian", columnKey: "createdAt" },
   ];
 
   return (
@@ -326,93 +295,65 @@ export default function ActionHistory() {
         </div>
       ) : null}
 
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 z-10">
-            <tr>
-              {renderSortHeader("ID", "id")}
-              {renderSortHeader("Thiết bị", "deviceName")}
-              {renderSortHeader(
-                "Hành động",
-                "action",
-                "text-center",
-                "mx-auto",
-              )}
-              {renderSortHeader("Trạng thái", "status")}
-              {renderSortHeader("Thời gian", "createdAt")}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                  Đang tải dữ liệu...
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                  Không có dữ liệu phù hợp
-                </td>
-              </tr>
-            ) : (
-              rows.map((record) => {
-                const statusGroup = detectStatusGroup(record);
-                const statusUI = getStatusUI(statusGroup);
-                const StatusIcon = statusUI.icon;
+      <SharedSortableTable
+        columns={tableColumns}
+        rows={rows}
+        loading={loading}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSortToggle={handleSortToggle}
+        renderRow={(record) => {
+          const statusGroup = detectStatusGroup(record);
+          const statusUI = getStatusUI(statusGroup);
+          const StatusIcon = statusUI.icon;
 
-                return (
-                  <tr
-                    key={record.id}
-                    className="bg-white hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="px-6 py-4 font-medium text-gray-600">
-                      #{record.id}
-                    </td>
-                    <td className="px-6 py-4 font-bold text-gray-800">
-                      {record?.deviceInfo?.name || "--"}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span
-                        className={`inline-flex items-center px-4 py-1 rounded-full text-xs font-semibold border ${
-                          String(record.action || "").toUpperCase() === "ON"
-                            ? "text-green-600 border-green-200 bg-green-50/50"
-                            : "text-gray-600 border-gray-200 bg-gray-100"
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                            String(record.action || "").toUpperCase() === "ON"
-                              ? "bg-green-500"
-                              : "bg-gray-400"
-                          }`}
-                        ></span>
-                        {toActionLabel(record.action)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${statusUI.dotClass}`}
-                        ></span>
-                        <StatusIcon
-                          className={`w-4 h-4 ${statusUI.textClass}`}
-                        />
-                        <span className={`font-bold ${statusUI.textClass}`}>
-                          {statusUI.label}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {formatDateTime(record.createdAt)}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+          return (
+            <tr
+              key={record.id}
+              className="bg-white hover:bg-gray-50/50 transition-colors"
+            >
+              <td className="px-6 py-4 font-medium text-gray-600">
+                #{record.id}
+              </td>
+              <td className="px-6 py-4 font-bold text-gray-800">
+                {record?.deviceInfo?.name || "--"}
+              </td>
+              <td className="px-6 py-4 text-center">
+                <span
+                  className={`inline-flex items-center px-4 py-1 rounded-full text-xs font-semibold border ${
+                    String(record.action || "").toUpperCase() === "ON"
+                      ? "text-green-600 border-green-200 bg-green-50/50"
+                      : "text-gray-600 border-gray-200 bg-gray-100"
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full mr-2 ${
+                      String(record.action || "").toUpperCase() === "ON"
+                        ? "bg-green-500"
+                        : "bg-gray-400"
+                    }`}
+                  ></span>
+                  {toActionLabel(record.action)}
+                </span>
+              </td>
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${statusUI.dotClass}`}
+                  ></span>
+                  <StatusIcon className={`w-4 h-4 ${statusUI.textClass}`} />
+                  <span className={`font-bold ${statusUI.textClass}`}>
+                    {statusUI.label}
+                  </span>
+                </div>
+              </td>
+              <td className="px-6 py-4 text-gray-500">
+                {formatDateTime(record.createdAt)}
+              </td>
+            </tr>
+          );
+        }}
+      />
 
       <Pagination
         currentPage={currentPage}

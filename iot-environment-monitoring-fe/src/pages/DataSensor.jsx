@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import api from "../services/api";
 import { useSensorSocket } from "../hooks/useSensorSocket";
 import Pagination from "../components/Pagination";
 import SearchBar from "../components/filters/SearchBar";
 import FilterSelect from "../components/filters/FilterSelect";
 import PageSizeInput from "../components/filters/PageSizeInput";
+import SharedSortableTable from "../components/tables/SharedSortableTable";
 
 const SENSOR_OPTIONS = [
   { value: "all", label: "Tất cả cảm biến" },
@@ -235,50 +235,17 @@ export default function DataSensor() {
     setCurrentPage(1);
   };
 
-  const renderSortHeader = (label, columnKey, thClassName = "") => {
-    const isActive = sortBy === columnKey;
-
-    return (
-      <th className={`px-6 py-4 font-semibold ${thClassName}`}>
-        <button
-          type="button"
-          onClick={() => handleSortToggle(columnKey)}
-          className={`group flex items-center gap-1.5 font-semibold transition-colors focus:outline-none ${
-            isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-600"
-          }`}
-          title={
-            isActive
-              ? sortOrder === "desc"
-                ? "Đang sắp xếp giảm dần"
-                : "Đang sắp xếp tăng dần"
-              : `Sắp xếp theo ${label}`
-          }
-        >
-          {label}
-          <span
-            className={`p-1 rounded transition-colors ${
-              isActive ? "bg-blue-50" : "bg-gray-100 group-hover:bg-gray-200"
-            }`}
-          >
-            {isActive ? (
-              sortOrder === "asc" ? (
-                <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
-              ) : (
-                <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-              )
-            ) : (
-              <ArrowDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400" />
-            )}
-          </span>
-        </button>
-      </th>
-    );
-  };
-
   const handlePageSizeChange = (value) => {
     setPageSize(value);
     setCurrentPage(1);
   };
+
+  const tableColumns = [
+    { label: "ID", columnKey: "id" },
+    { label: "Cảm biến", columnKey: "sensorName" },
+    { label: "Giá trị", columnKey: "value" },
+    { label: "Thời gian", columnKey: "createdAt" },
+  ];
 
   return (
     <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -316,72 +283,52 @@ export default function DataSensor() {
         </div>
       ) : null}
 
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 z-10">
-            <tr>
-              {renderSortHeader("ID", "id")}
-              {renderSortHeader("Cảm biến", "sensorName")}
-              {renderSortHeader("Giá trị", "value")}
-              {renderSortHeader("Thời gian", "createdAt")}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  Đang tải dữ liệu...
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  Không có dữ liệu phù hợp
-                </td>
-              </tr>
-            ) : (
-              rows.map((record) => {
-                const dbSensorName =
-                  record?.sensorInfo?.name || record?.sensorName || "";
-                const sensorType = resolveSensorType(dbSensorName);
-                const sensorMeta = SENSOR_UI_META[sensorType] || {
-                  textClass: "text-gray-500",
-                  borderClass: "border-gray-200",
-                  dotClass: "bg-gray-400",
-                };
-                const sensorDisplayName = dbSensorName || "Không xác định";
+      <SharedSortableTable
+        columns={tableColumns}
+        rows={rows}
+        loading={loading}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSortToggle={handleSortToggle}
+        renderRow={(record) => {
+          const dbSensorName =
+            record?.sensorInfo?.name || record?.sensorName || "";
+          const sensorType = resolveSensorType(dbSensorName);
+          const sensorMeta = SENSOR_UI_META[sensorType] || {
+            textClass: "text-gray-500",
+            borderClass: "border-gray-200",
+            dotClass: "bg-gray-400",
+          };
+          const sensorDisplayName = dbSensorName || "Không xác định";
 
-                return (
-                  <tr
-                    key={record.id}
-                    className="bg-white hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="px-6 py-4 font-medium text-gray-600">
-                      #{record.id}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${sensorMeta.textClass} ${sensorMeta.borderClass}`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${sensorMeta.dotClass}`}
-                        />
-                        {sensorDisplayName}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-gray-800">
-                      {formatSensorValue(sensorType, record.value)}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {formatDateTime(record.createdAt)}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+          return (
+            <tr
+              key={record.id}
+              className="bg-white hover:bg-gray-50/50 transition-colors"
+            >
+              <td className="px-6 py-4 font-medium text-gray-600">
+                #{record.id}
+              </td>
+              <td className="px-6 py-4">
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${sensorMeta.textClass} ${sensorMeta.borderClass}`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full mr-2 ${sensorMeta.dotClass}`}
+                  />
+                  {sensorDisplayName}
+                </span>
+              </td>
+              <td className="px-6 py-4 font-bold text-gray-800">
+                {formatSensorValue(sensorType, record.value)}
+              </td>
+              <td className="px-6 py-4 text-gray-500">
+                {formatDateTime(record.createdAt)}
+              </td>
+            </tr>
+          );
+        }}
+      />
 
       <Pagination
         currentPage={currentPage}
