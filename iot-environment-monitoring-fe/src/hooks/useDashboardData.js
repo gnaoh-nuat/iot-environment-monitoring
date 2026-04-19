@@ -175,8 +175,10 @@ export const useDashboardData = () => {
   const [dashboardError, setDashboardError] = useState(null);
   const [isSensorOnline, setIsSensorOnline] = useState(false);
   const lastSensorUpdateTimeRef = useRef(0);
+  const lastSocketErrorRef = useRef(null);
 
   const {
+    connected: socketConnected,
     lastSensorPacket,
     lastDevicePacket,
     error: socketError,
@@ -260,9 +262,18 @@ export const useDashboardData = () => {
 
   useEffect(() => {
     if (socketError) {
+      lastSocketErrorRef.current = socketError;
       setDashboardError(socketError);
+      return;
     }
-  }, [socketError]);
+
+    if (socketConnected && lastSocketErrorRef.current) {
+      setDashboardError((prev) =>
+        prev === lastSocketErrorRef.current ? null : prev,
+      );
+      lastSocketErrorRef.current = null;
+    }
+  }, [socketConnected, socketError]);
 
   useEffect(() => {
     if (!lastDevicePacket || lastDevicePacket.stale) {
@@ -318,18 +329,42 @@ export const useDashboardData = () => {
     lastSensorUpdateTimeRef.current = Date.now();
     setIsSensorOnline(true);
 
-    const readingMap = new Map();
-    readings.forEach((reading) => {
-      readingMap.set(reading.name, Number(reading.value));
-    });
+    setSensors((prev) => {
+      const mergedBySensorId = new Map(
+        prev.map((sensor) => [String(sensor.id), sensor]),
+      );
 
-    setSensors((prev) =>
-      prev.map((sensor) =>
-        readingMap.has(sensor.id)
-          ? { ...sensor, value: readingMap.get(sensor.id) }
-          : sensor,
-      ),
-    );
+      readings.forEach((reading) => {
+        const sensorId = String(reading?.name || "");
+        if (!sensorId) {
+          return;
+        }
+
+        const numericValue = Number(reading.value);
+        const nextValue = Number.isFinite(numericValue) ? numericValue : null;
+
+        if (mergedBySensorId.has(sensorId)) {
+          mergedBySensorId.set(sensorId, {
+            ...mergedBySensorId.get(sensorId),
+            value: nextValue,
+          });
+          return;
+        }
+
+        const { icon, color, bgColor, unit } = resolveSensorVisual(sensorId);
+        mergedBySensorId.set(sensorId, {
+          id: sensorId,
+          name: sensorId,
+          icon,
+          color,
+          bgColor,
+          unit,
+          value: nextValue,
+        });
+      });
+
+      return Array.from(mergedBySensorId.values());
+    });
 
     const packetDate = new Date(lastSensorPacket.timestamp || Date.now());
     const timeKey = Math.round(packetDate.getTime() / 2000) * 2000;

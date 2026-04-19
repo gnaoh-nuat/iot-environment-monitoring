@@ -7,8 +7,6 @@ const Device = require("../models/Device");
 const { Op } = require("sequelize");
 const { clearActionTimeout } = require("../services/deviceControlTracker");
 
-let ioRef;
-
 const host = process.env.MQTT_HOST || "localhost";
 const port = process.env.MQTT_PORT || 2708;
 const sensorTopics = (
@@ -155,11 +153,10 @@ mqttClient.on("message", async (topic, message) => {
 
         const sensorValue = normalizeSensorValue(data[key]);
 
-        let sensor = await Sensor.findOne({ where: { name: sensorName } });
-
-        if (!sensor) {
-          sensor = await Sensor.create({ name: sensorName });
-        }
+        const [sensor] = await Sensor.findOrCreate({
+          where: { name: sensorName },
+          defaults: { name: sensorName },
+        });
 
         const saved = await DataSensor.create({
           sensorId: sensor.id,
@@ -318,8 +315,4 @@ const publishCommand = (payload) => {
 module.exports = {
   mqttClient,
   publishCommand,
-  setSocket: (io) => {
-    ioRef = io;
-    console.log("[Socket.io] Socket reference set for MQTT emitter");
-  },
 };

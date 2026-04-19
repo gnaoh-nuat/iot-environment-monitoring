@@ -102,7 +102,7 @@ export default function Pagination({
         </div>
 
         {/* 3. Ô NHẬP SỐ TRANG (ĐÃ ẨN MŨI TÊN NUMBER) */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium hidden sm:flex">
+        <div className="items-center gap-2 text-sm text-gray-500 font-medium hidden sm:flex">
           <span>Đến trang</span>
           <input
             type="number"

@@ -77,8 +77,9 @@ export const useSensorSocket = () => {
 
       subscriberCount = Math.max(0, subscriberCount - 1);
 
-      if (subscriberCount === 0 && socket.connected) {
+      if (subscriberCount === 0) {
         socket.disconnect();
+        sharedSocket = null;
       }
     };
   }, []);

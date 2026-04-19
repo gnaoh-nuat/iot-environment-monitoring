@@ -65,10 +65,14 @@ Mo trinh duyet tai:
 - `POST /devices`
 - `GET /data-sensors/history`
 - `GET /data-sensors/search`
-- `POST /actions/control`
+- `POST /device/control`
 - `GET /actions/search`
 
 ## Ghi Chu
 
 - Backend da bo logic user/login/auth theo yeu cau.
+- Cleanup du lieu sensor da duoc wire vao runtime:
+  - `ENABLE_SENSOR_DATA_CLEANUP_CRON=true|false`
+  - `DATA_SENSOR_CLEANUP_CRON` (mac dinh: `0 0 * * *`)
+  - `DATA_SENSOR_RETENTION_DAYS` (mac dinh: `1`)
 - Neu van gap loi ket noi DB, kiem tra lai username/password trong `.env` va dich vu PostgreSQL da chay.

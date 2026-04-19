@@ -9,9 +9,9 @@ const sequelize = require("./config/database");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpecs = require("./config/swagger");
 const initializeAssociations = require("./models/associations");
+const { startCleanupDataSensorJob } = require("./cron/cleanupDataSensor");
 
 const { initSocket } = require("./socket/socketHandler");
-const { setSocket } = require("./mqtt/mqttClient");
 
 // ===== INIT APP =====
 const app = express();
@@ -32,8 +32,7 @@ app.use(
 );
 
 // ===== SOCKET.IO =====
-const io = initSocket(server);
-setSocket(io);
+initSocket(server);
 
 // ===== MQTT (QUAN TRỌNG) =====
 require("./mqtt/mqttClient");
@@ -56,6 +55,9 @@ const startServer = async () => {
 
     await sequelize.sync({ alter: true });
     console.log("Database schema synchronized successfully.");
+
+    // Start maintenance jobs after DB is ready.
+    startCleanupDataSensorJob();
 
     // Register business routes only after DB is ready.
     app.use(rootRouter);

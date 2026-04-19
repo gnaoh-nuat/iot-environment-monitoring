@@ -148,8 +148,16 @@ const searchDataSensors = async (req, res, next) => {
     }
 
     let orderClause = [["createdAt", normalizedSortOrder.toUpperCase()]];
-    if (["id", "value", "createdAt"].includes(normalizedSortBy)) {
+    if (["id", "createdAt"].includes(normalizedSortBy)) {
       orderClause = [[normalizedSortBy, normalizedSortOrder.toUpperCase()]];
+    }
+    if (normalizedSortBy === "value") {
+      orderClause = [
+        [
+          Sequelize.cast(Sequelize.col("DataSensor.value"), "DOUBLE PRECISION"),
+          normalizedSortOrder.toUpperCase(),
+        ],
+      ];
     }
     if (normalizedSortBy === "sensorName") {
       orderClause = [

@@ -1,7 +1,5 @@
 const Sensor = require("../models/Sensor");
 const AppError = require("../utils/appError");
-const { Op } = require("sequelize");
-const sequelize = require("../config/database");
 
 // ===== CREATE SENSOR =====
 const createSensor = async (req, res, next) => {

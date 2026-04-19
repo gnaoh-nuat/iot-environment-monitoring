@@ -1,8 +1,6 @@
 const Device = require("../models/Device");
-const Action = require("../models/ActionHistory");
 const DataSensor = require("../models/SensorData");
 const Sensor = require("../models/Sensor");
-const AppError = require("../utils/appError");
 
 const SENSOR_NAMES = ["temperature", "humidity", "light"];
 
@@ -22,18 +20,29 @@ const getDashboardInit = async (req, res, next) => {
     const snapshotAt = new Date().toISOString();
 
     // ===== PARALLEL QUERIES =====
-    const [devices, allActions, ...sensorHistories] = await Promise.all([
+    const [devicesWithLatestAction, ...sensorHistories] = await Promise.all([
       // 1. Get all devices
       Device.findAll({
         order: [["createdAt", "ASC"]],
+        include: [
+          {
+            association: "actionLogs",
+            attributes: [
+              "id",
+              "deviceId",
+              "action",
+              "status",
+              "createdAt",
+              "updatedAt",
+            ],
+            separate: true,
+            limit: 1,
+            order: [["createdAt", "DESC"]],
+          },
+        ],
       }),
 
-      // 2. Get latest action per device (recent first)
-      Action.findAll({
-        order: [["createdAt", "DESC"]],
-      }),
-
-      // 3-5. Get sensor histories (parallel)
+      // 2-4. Get sensor histories (parallel)
       ...SENSOR_NAMES.map((sensorName) =>
         (async () => {
           const sensor = await Sensor.findOne({ where: { name: sensorName } });
@@ -54,11 +63,20 @@ const getDashboardInit = async (req, res, next) => {
 
     // ===== BUILD LATEST ACTIONS MAP =====
     const latestActionByDeviceId = {};
-    allActions.forEach((action) => {
-      const deviceKey = String(action.deviceId);
-      if (!latestActionByDeviceId[deviceKey]) {
-        latestActionByDeviceId[deviceKey] = action;
+    const devices = devicesWithLatestAction.map((device) => {
+      const plainDevice = device.get({ plain: true });
+      const latestAction =
+        Array.isArray(plainDevice.actionLogs) &&
+        plainDevice.actionLogs.length > 0
+          ? plainDevice.actionLogs[0]
+          : null;
+
+      if (latestAction) {
+        latestActionByDeviceId[String(plainDevice.id)] = latestAction;
       }
+
+      delete plainDevice.actionLogs;
+      return plainDevice;
     });
 
     return res.status(200).json({
