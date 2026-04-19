@@ -341,14 +341,15 @@ export default function DataSensor() {
               </tr>
             ) : (
               rows.map((record) => {
-                const dbSensorName = record?.sensorInfo?.name || "";
+                const dbSensorName =
+                  record?.sensorInfo?.name || record?.sensorName || "";
                 const sensorType = resolveSensorType(dbSensorName);
                 const sensorMeta = SENSOR_UI_META[sensorType] || {
-                  label: dbSensorName || "Không xác định",
                   textClass: "text-gray-500",
                   borderClass: "border-gray-200",
                   dotClass: "bg-gray-400",
                 };
+                const sensorDisplayName = dbSensorName || "Không xác định";
 
                 return (
                   <tr
@@ -365,7 +366,7 @@ export default function DataSensor() {
                         <span
                           className={`w-1.5 h-1.5 rounded-full mr-2 ${sensorMeta.dotClass}`}
                         />
-                        {sensorMeta.label}
+                        {sensorDisplayName}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-gray-800">
