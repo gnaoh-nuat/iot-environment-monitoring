@@ -22,7 +22,7 @@ export default function Profile() {
       description: "Tải xuống báo cáo chi tiết về hệ thống IoT",
       icon: FileText,
       color: "bg-red-500",
-      link: "#",
+      link: "https://drive.google.com/drive/folders/1ElVoZ2DbvIqXL1Teb3fvIt9WGxnfgst0?hl=vi",
     },
     {
       id: 2,
@@ -30,7 +30,7 @@ export default function Profile() {
       description: "Tài liệu hướng dẫn sử dụng API",
       icon: FileCode2,
       color: "bg-emerald-500",
-      link: "#",
+      link: "http://localhost:5000",
     },
     {
       id: 3,
@@ -38,7 +38,7 @@ export default function Profile() {
       description: "Mã nguồn dự án trên Github",
       icon: FaGithub, // Sử dụng icon từ react-icons/fa
       color: "bg-slate-800",
-      link: "#",
+      link: "https://github.com/gnaoh-nuat/iot-environment-monitoring.git",
     },
     {
       id: 4,
@@ -46,7 +46,7 @@ export default function Profile() {
       description: "Thiết kế giao diện trên Figma",
       icon: FaFigma, // Sử dụng icon từ react-icons/fa
       color: "bg-purple-500",
-      link: "#",
+      link: "https://www.figma.com/design/A4QJ9ZR10Voct51FLqFhaI/IOTProject?node-id=0-1&t=FIzlUN2U1Dv6EHBr-1",
     },
   ];
 
@@ -170,6 +170,8 @@ export default function Profile() {
               <a
                 key={resource.id}
                 href={resource.link}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="group bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 flex flex-col justify-between"
               >
                 <div>
