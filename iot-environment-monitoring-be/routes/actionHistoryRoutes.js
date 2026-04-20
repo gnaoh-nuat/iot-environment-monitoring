@@ -1,5 +1,8 @@
 const express = require("express");
-const { searchActions } = require("../controllers/actionHistoryController");
+const {
+  searchActions,
+  getDeviceManagementDailyStats,
+} = require("../controllers/actionHistoryController");
 
 const router = express.Router();
 
@@ -73,5 +76,37 @@ const router = express.Router();
  *         description: Internal server error
  */
 router.get("/search", searchActions);
+
+/**
+ * @swagger
+ * /actions/device-management/daily:
+ *   get:
+ *     summary: Get daily successful ON/OFF counts for Device Management page
+ *     tags: [Actions]
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *           example: 2026-04-20
+ *         description: Selected day in YYYY-MM-DD
+ *       - in: query
+ *         name: timezone
+ *         schema:
+ *           type: string
+ *           default: Asia/Ho_Chi_Minh
+ *           example: Asia/Ho_Chi_Minh
+ *         description: IANA timezone used when grouping records by day
+ *     responses:
+ *       200:
+ *         description: Daily ON/OFF stats loaded successfully
+ *       400:
+ *         description: Invalid date or timezone
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/device-management/daily", getDeviceManagementDailyStats);
 
 module.exports = router;

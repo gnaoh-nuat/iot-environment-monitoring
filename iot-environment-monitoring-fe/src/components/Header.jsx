@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { MdSensors, MdHistory, MdPerson } from "react-icons/md";
 import { IoIosSpeedometer } from "react-icons/io";
+import { RiBarChartGroupedFill } from "react-icons/ri";
 
 const Header = () => {
   const navItems = [
@@ -18,6 +19,11 @@ const Header = () => {
       path: "/history",
       label: "Action History",
       icon: <MdHistory className="text-lg" />,
+    },
+    {
+      path: "/device-management",
+      label: "Device Management",
+      icon: <RiBarChartGroupedFill className="text-lg" />,
     },
     {
       path: "/profile",

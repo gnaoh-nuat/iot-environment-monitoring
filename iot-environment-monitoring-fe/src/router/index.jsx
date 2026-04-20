@@ -5,6 +5,7 @@ import MainLayout from "../layouts/MainLayout";
 import Dashboard from "../pages/Dashboard";
 import DataSensor from "../pages/DataSensor";
 import ActionHistory from "../pages/ActionHistory";
+import DeviceManagement from "../pages/DeviceManagement";
 import Profile from "../pages/Profile";
 
 const router = createBrowserRouter([
@@ -27,6 +28,10 @@ const router = createBrowserRouter([
       {
         path: "history",
         element: <ActionHistory />,
+      },
+      {
+        path: "device-management",
+        element: <DeviceManagement />,
       },
       {
         path: "profile",

@@ -16,6 +16,15 @@ const buildDayRange = (date) => {
   return { start, end };
 };
 
+const isValidTimeZone = (value) => {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
 const isDateOnlyQuery = (input) => {
   const normalizedInput = String(input || "").trim();
 
@@ -238,6 +247,133 @@ const searchActions = async (req, res, next) => {
   }
 };
 
+const getDeviceManagementDailyStats = async (req, res, next) => {
+  try {
+    const selectedDate = String(req.query.date || "").trim();
+    const timezone = String(req.query.timezone || "Asia/Ho_Chi_Minh").trim();
+
+    if (!selectedDate) {
+      throw new AppError(400, "date là bắt buộc (YYYY-MM-DD)");
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      throw new AppError(
+        400,
+        "date không hợp lệ, định dạng đúng là YYYY-MM-DD",
+      );
+    }
+
+    if (!isValidTimeZone(timezone)) {
+      throw new AppError(400, "timezone không hợp lệ");
+    }
+
+    const devices = await Device.findAll({
+      attributes: ["id", "name"],
+      order: [["createdAt", "ASC"]],
+      limit: 5,
+    });
+
+    if (devices.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          selectedDate,
+          timezone,
+          devices: [],
+          countsByDevice: [],
+        },
+        message: "Không có thiết bị để thống kê",
+      });
+    }
+
+    const deviceIds = devices.map((device) => Number(device.id));
+
+    const countRows = await Action.findAll({
+      attributes: [
+        "deviceId",
+        "action",
+        [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
+      ],
+      where: {
+        deviceId: { [Op.in]: deviceIds },
+        status: { [Op.in]: ["ON", "OFF"] },
+        [Op.and]: [
+          Sequelize.where(
+            Sequelize.col("Action.action"),
+            Op.eq,
+            Sequelize.col("Action.status"),
+          ),
+          Sequelize.where(
+            Sequelize.fn(
+              "to_char",
+              Sequelize.fn(
+                "timezone",
+                timezone,
+                Sequelize.col("Action.createdAt"),
+              ),
+              "YYYY-MM-DD",
+            ),
+            selectedDate,
+          ),
+        ],
+      },
+      group: ["deviceId", "action"],
+      raw: true,
+    });
+
+    const countMap = {};
+
+    countRows.forEach((row) => {
+      const deviceIdKey = String(row.deviceId);
+      const actionKey = String(row.action || "").toUpperCase();
+      const countValue = Number(row.count || 0);
+
+      if (!countMap[deviceIdKey]) {
+        countMap[deviceIdKey] = { onCount: 0, offCount: 0 };
+      }
+
+      if (actionKey === "ON") {
+        countMap[deviceIdKey].onCount = countValue;
+      }
+
+      if (actionKey === "OFF") {
+        countMap[deviceIdKey].offCount = countValue;
+      }
+    });
+
+    const countsByDevice = devices.map((device) => {
+      const key = String(device.id);
+      const onCount = Number(countMap[key]?.onCount || 0);
+      const offCount = Number(countMap[key]?.offCount || 0);
+
+      return {
+        deviceId: Number(device.id),
+        deviceName: device.name,
+        onCount,
+        offCount,
+        total: onCount + offCount,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        selectedDate,
+        timezone,
+        devices: devices.map((device) => ({
+          id: Number(device.id),
+          name: device.name,
+        })),
+        countsByDevice,
+      },
+      message: "Thống kê bật/tắt theo ngày thành công",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   searchActions,
+  getDeviceManagementDailyStats,
 };

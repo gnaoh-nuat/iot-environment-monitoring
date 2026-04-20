@@ -15,8 +15,8 @@ export default function Dashboard() {
   } = useDashboardData();
 
   return (
-    <div className="h-full min-h-[calc(100vh-140px)] flex gap-6 overflow-hidden">
-      <aside className="w-1/4 flex flex-col gap-6 overflow-hidden pr-2 pb-2">
+    <div className="h-full min-h-0 flex gap-4 overflow-hidden">
+      <aside className="w-[34%] xl:w-[30%] min-h-0 flex flex-col gap-4 overflow-hidden pr-1">
         {dashboardError ? (
           <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
             {dashboardError}
@@ -32,7 +32,7 @@ export default function Dashboard() {
         />
       </aside>
 
-      <main className="flex-1 flex flex-col gap-6 overflow-hidden pr-2">
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <DashboardRealtimeChart sensors={sensors} chartData={chartData} />
       </main>
     </div>

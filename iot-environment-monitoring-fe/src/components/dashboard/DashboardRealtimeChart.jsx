@@ -23,6 +23,12 @@ const CustomTooltip = ({ active, payload, label }) => {
             // Lọc bớt chữ "(°C)", "(%)" trong name để hiển thị cho gọn
             const cleanName = String(entry.name).split(" ")[0];
 
+            // ĐÃ SỬA: Kiểm tra nếu tên có chứa chữ "Lux" thì làm tròn giá trị
+            const isLight = String(entry.name).includes("Lux");
+            const displayValue = isLight
+              ? Math.round(entry.value)
+              : entry.value;
+
             return (
               <div
                 key={index}
@@ -38,7 +44,7 @@ const CustomTooltip = ({ active, payload, label }) => {
                   </span>
                 </div>
                 <span className="text-slate-900 text-[14px] font-bold">
-                  {entry.value}
+                  {displayValue}
                 </span>
               </div>
             );
@@ -60,19 +66,16 @@ function ChartBody({ sensors, chartData }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+    <ResponsiveContainer width="100%" height="100%">
       <LineChart
         data={chartData}
         margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
       >
-        {/* Lưới ngang nét đứt, màu mờ nhạt, bỏ lưới dọc */}
         <CartesianGrid
           strokeDasharray="4 4"
           stroke="#F1F5F9"
           vertical={false}
         />
-
-        {/* Trục X: Ẩn đường kẻ trục, giữ lại chữ */}
         <XAxis
           dataKey="time"
           stroke="#94A3B8"
@@ -82,8 +85,6 @@ function ChartBody({ sensors, chartData }) {
           dy={15}
           interval="preserveStartEnd"
         />
-
-        {/* Trục Y trái: Nhiệt độ/Độ ẩm */}
         <YAxis
           yAxisId="left"
           domain={[0, 100]}
@@ -93,35 +94,29 @@ function ChartBody({ sensors, chartData }) {
           axisLine={false}
           dx={-10}
         />
-
-        {/* Trục Y phải: Ánh sáng */}
         <YAxis
           yAxisId="right"
           orientation="right"
-          stroke="#CBD5E1" // Màu xám nhạt hơn để không tranh giành sự chú ý
+          stroke="#CBD5E1"
           style={{ fontSize: "11px", fontWeight: 500 }}
           tickLine={false}
           axisLine={false}
           dx={10}
         />
-
-        {/* Sử dụng Custom Tooltip đã tạo ở trên */}
         <Tooltip
           content={<CustomTooltip />}
-          cursor={{ stroke: "#E2E8F0", strokeWidth: 1, strokeDasharray: "4 4" }} // Đường gióng thẳng đứng khi hover
+          cursor={{ stroke: "#E2E8F0", strokeWidth: 1, strokeDasharray: "4 4" }}
         />
-
         <Legend
           wrapperStyle={{
             fontSize: "12px",
             fontWeight: 600,
             color: "#64748B",
-            paddingTop: "24px",
+            paddingTop: "12px",
           }}
           iconType="circle"
           iconSize={8}
         />
-
         {sensors.map((sensor) => {
           const sensorName = String(sensor.name || "").toLowerCase();
           const isLight =
@@ -131,17 +126,17 @@ function ChartBody({ sensors, chartData }) {
             <Line
               key={sensor.id}
               yAxisId={isLight ? "right" : "left"}
-              type="monotone" // Đường cong mềm mại thay vì gấp khúc
+              type="monotone"
               dataKey={sensor.id}
               name={`${sensor.name} ${sensor.unit ? `(${sensor.unit})` : ""}`}
               stroke={sensor.color}
               strokeWidth={3}
               connectNulls
-              dot={false} // Ẩn dot mặc định cho mượt
+              dot={false}
               activeDot={{
                 r: 6,
                 strokeWidth: 3,
-                stroke: "#ffffff", // Chấm tròn to có viền trắng khi hover
+                stroke: "#ffffff",
                 fill: sensor.color,
                 style: { filter: `drop-shadow(0px 4px 6px ${sensor.color}40)` },
               }}
@@ -155,11 +150,11 @@ function ChartBody({ sensors, chartData }) {
 
 export default function DashboardRealtimeChart({ sensors, chartData }) {
   return (
-    <div className="bg-white rounded-2xl shadow-[0_2px_10px_-3px_rgba(0,0,0,0.04)] border border-slate-100 p-6 flex flex-col flex-1">
-      <div className="flex items-start justify-between mb-8">
+    <div className="bg-white rounded-2xl shadow-[0_2px_10px_-3px_rgba(0,0,0,0.04)] border border-slate-100 p-4 flex flex-col flex-1 min-h-0">
+      <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50/50 border border-blue-100/50 flex items-center justify-center shadow-inner">
-            <Activity className="w-6 h-6 text-blue-500" />
+          <div className="w-10 h-10 rounded-xl bg-blue-50/50 border border-blue-100/50 flex items-center justify-center shadow-inner">
+            <Activity className="w-5 h-5 text-blue-500" />
           </div>
 
           <div>
@@ -172,12 +167,12 @@ export default function DashboardRealtimeChart({ sensors, chartData }) {
           </div>
         </div>
 
-        {/* Các Badge hiển thị thông số thu gọn trên góc phải */}
-        <div className="flex flex-wrap justify-end gap-2 max-w-[50%]">
+        {/* ĐÃ SỬA: Các Badge hiển thị thông số thu gọn trên góc phải */}
+        <div className="flex flex-wrap justify-end gap-2 max-w-[55%]">
           {sensors.map((sensor) => (
             <div
               key={`badge-${sensor.id}`}
-              className="px-3 py-1.5 rounded-lg border flex items-center gap-2"
+              className="px-2.5 py-1 rounded-lg border flex items-center gap-2"
               style={{
                 backgroundColor: `${sensor.bgColor}40`,
                 borderColor: `${sensor.color}20`,
@@ -191,7 +186,11 @@ export default function DashboardRealtimeChart({ sensors, chartData }) {
                 className="text-[12px] font-bold"
                 style={{ color: sensor.color }}
               >
-                {sensor.value ?? "--"}{" "}
+                {sensor.value !== null && sensor.value !== undefined
+                  ? sensor.unit === "Lux"
+                    ? Math.round(sensor.value)
+                    : sensor.value
+                  : "--"}{" "}
                 <span className="opacity-70 font-medium text-[10px]">
                   {sensor.unit}
                 </span>
@@ -201,7 +200,7 @@ export default function DashboardRealtimeChart({ sensors, chartData }) {
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-[450px]">
+      <div className="flex-1 w-full min-h-0">
         <ChartBody sensors={sensors} chartData={chartData} />
       </div>
     </div>

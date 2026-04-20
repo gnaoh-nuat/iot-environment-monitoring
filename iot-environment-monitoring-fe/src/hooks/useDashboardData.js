@@ -178,8 +178,12 @@ export const useDashboardData = () => {
   const [chartData, setChartData] = useState([]);
   const [dashboardError, setDashboardError] = useState(null);
   const [isSensorOnline, setIsSensorOnline] = useState(false);
+
   const lastSensorUpdateTimeRef = useRef(0);
   const lastSocketErrorRef = useRef(null);
+
+  // 🆕 Thêm ref để lưu trữ các bộ đếm thời gian (timer) của thông báo lỗi thiết bị
+  const errorTimeoutsRef = useRef({});
 
   const {
     connected: socketConnected,
@@ -205,12 +209,45 @@ export const useDashboardData = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // 🆕 Dọn dẹp tất cả các timer khi Component bị hủy (tránh memory leak)
+  useEffect(() => {
+    return () => {
+      Object.values(errorTimeoutsRef.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  // 🆕 Xử lý tự động ẩn lỗi sau 5 giây
+  useEffect(() => {
+    devices.forEach((device) => {
+      if (device.errorMessage) {
+        // Nếu thiết bị có lỗi mà chưa có timer đếm ngược, ta khởi tạo timer 5s
+        if (!errorTimeoutsRef.current[device.id]) {
+          errorTimeoutsRef.current[device.id] = setTimeout(() => {
+            // Hết 5s -> Xóa câu thông báo lỗi đi
+            setDevices((prev) =>
+              prev.map((d) =>
+                d.id === device.id ? { ...d, errorMessage: null } : d,
+              ),
+            );
+            // Hủy theo dõi timer này
+            delete errorTimeoutsRef.current[device.id];
+          }, 5000); // 5000ms = 5 giây
+        }
+      } else {
+        // Nếu thiết bị không có lỗi (ví dụ user vừa ấn bật lại), hủy timer cũ ngay lập tức
+        if (errorTimeoutsRef.current[device.id]) {
+          clearTimeout(errorTimeoutsRef.current[device.id]);
+          delete errorTimeoutsRef.current[device.id];
+        }
+      }
+    });
+  }, [devices]);
+
   useEffect(() => {
     let mounted = true;
 
     const loadDashboardSnapshot = async () => {
       try {
-        // Gọi API để lấy dữ liệu khởi tạo cho dashboard, bao gồm cả thông tin thiết bị và lịch sử cảm biến
         const response = await api.get("/dashboard/init", {
           params: { historyLimit: HISTORY_LIMIT },
         });

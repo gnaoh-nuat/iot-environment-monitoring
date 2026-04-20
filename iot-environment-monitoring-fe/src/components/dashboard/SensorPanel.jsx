@@ -1,7 +1,7 @@
 export default function SensorPanel({ sensors, isSensorOnline }) {
   return (
-    <div className="flex flex-col gap-3">
-      <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase mb-1">
+    <div className="flex flex-col gap-2">
+      <h3 className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">
         Cảm biến
       </h3>
 
@@ -11,7 +11,7 @@ export default function SensorPanel({ sensors, isSensorOnline }) {
         return (
           <div
             key={sensor.id}
-            className="group bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.08)] transition-all duration-300 flex items-center gap-4 relative overflow-hidden"
+            className="group bg-white rounded-xl border border-slate-100 px-3 py-2.5 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.08)] transition-all duration-300 flex items-center gap-3 relative overflow-hidden"
           >
             {/* Hiệu ứng viền mờ bên trái khi hover */}
             <div
@@ -20,19 +20,24 @@ export default function SensorPanel({ sensors, isSensorOnline }) {
             />
 
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: sensor.bgColor }}
             >
-              <SensorIcon className="w-6 h-6" style={{ color: sensor.color }} />
+              <SensorIcon className="w-5 h-5" style={{ color: sensor.color }} />
             </div>
 
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-gray-500 mb-0.5 truncate">
+              <p className="text-[12px] font-medium text-gray-500 mb-0.5 truncate">
                 {sensor.name}
               </p>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold tracking-tight text-slate-800">
-                  {sensor.value ?? "--"}
+                {/* ĐÃ SỬA: Làm tròn riêng cho đơn vị Lux */}
+                <span className="text-xl font-bold tracking-tight text-slate-800 leading-none">
+                  {sensor.value !== null && sensor.value !== undefined
+                    ? sensor.unit === "Lux"
+                      ? Math.round(sensor.value)
+                      : sensor.value
+                    : "--"}
                 </span>
                 <span className="text-xs font-medium text-gray-400">
                   {sensor.unit}
