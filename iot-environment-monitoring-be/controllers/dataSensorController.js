@@ -57,42 +57,6 @@ const buildDayRange = (date) => {
   return { start, end };
 };
 
-const getDataSensorHistory = async (req, res, next) => {
-  try {
-    const { sensorName, limit } = req.query;
-
-    if (!sensorName) {
-      throw new AppError(400, "sensorName is required");
-    }
-
-    const sensor = await Sensor.findOne({
-      where: { name: sensorName },
-    });
-
-    if (!sensor) {
-      throw new AppError(404, "Sensor not found");
-    }
-
-    const parsedLimit = Number.parseInt(limit, 10);
-    const safeLimit =
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 20;
-
-    const data = await DataSensor.findAll({
-      where: { sensorId: sensor.id },
-      order: [["createdAt", "DESC"]],
-      limit: safeLimit,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: `Get ${sensorName} history successfully`,
-      data: data.reverse(),
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 const searchDataSensors = async (req, res, next) => {
   try {
     let {
@@ -278,6 +242,5 @@ const searchDataSensors = async (req, res, next) => {
 };
 
 module.exports = {
-  getDataSensorHistory,
   searchDataSensors,
 };

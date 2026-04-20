@@ -4,11 +4,15 @@ import {
   MapPin,
   Calendar,
   FileText,
-  Code,
-  FolderGit,
-  Palette,
+  FileCode2,
   ExternalLink,
+  ArrowRight,
+  Link,
+  User,
+  Briefcase,
 } from "lucide-react";
+// IMPORT THÊM LOGO THƯƠNG HIỆU TỪ REACT-ICONS
+import { FaGithub, FaFigma } from "react-icons/fa";
 
 export default function Profile() {
   const resources = [
@@ -24,7 +28,7 @@ export default function Profile() {
       id: 2,
       title: "API Documentation",
       description: "Tài liệu hướng dẫn sử dụng API",
-      icon: Code,
+      icon: FileCode2,
       color: "bg-emerald-500",
       link: "#",
     },
@@ -32,7 +36,7 @@ export default function Profile() {
       id: 3,
       title: "Github Repository",
       description: "Mã nguồn dự án trên Github",
-      icon: FolderGit,
+      icon: FaGithub, // Sử dụng icon từ react-icons/fa
       color: "bg-slate-800",
       link: "#",
     },
@@ -40,25 +44,33 @@ export default function Profile() {
       id: 4,
       title: "Figma Design",
       description: "Thiết kế giao diện trên Figma",
-      icon: Palette,
+      icon: FaFigma, // Sử dụng icon từ react-icons/fa
       color: "bg-purple-500",
       link: "#",
     },
   ];
 
   return (
-    // Sử dụng h-full và overflow-y-auto để component tự thích ứng với MainLayout
-    <div className="h-full flex flex-col gap-6 overflow-y-auto pb-4">
-      {/* 1. Profile Info Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 flex-shrink-0">
-        <div className="flex flex-col md:flex-row items-start gap-8">
-          {/* Avatar & Status */}
+    // No scroll layout
+    <div className="h-full flex flex-col gap-4 overflow-hidden p-4">
+      {/* Profile Info Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-4">
+          <User className="w-4 h-4 text-gray-500" />
+          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Thông tin cá nhân
+          </h2>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-start gap-6">
+          {/* Avatar */}
           <div className="flex flex-col items-center flex-shrink-0">
-            <div className="w-28 h-28 rounded-full bg-blue-600 flex items-center justify-center text-white text-3xl font-bold ring-4 ring-blue-50 shadow-sm">
+            <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold ring-4 ring-blue-50 shadow-sm">
               HMT
             </div>
+
             <div className="mt-4">
-              <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-green-50 text-green-600 border border-green-200">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-600 border border-green-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 Online
               </span>
@@ -66,20 +78,23 @@ export default function Profile() {
           </div>
 
           {/* User Details */}
-          <div className="flex-1 w-full">
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">
+          <div className="flex-1 w-full pt-1">
+            <h1 className="text-xl font-bold text-gray-900 mb-1.5">
               Hoàng Mạnh Tuấn
             </h1>
-            <p className="text-sm text-gray-500 font-medium mb-6">
-              Frontend Engineer
+
+            <p className="text-sm text-gray-500 font-medium mb-5 flex items-center gap-1.5">
+              <Briefcase className="w-4 h-4" />
+              Game Developer
             </p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-5">
               {/* Email */}
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
-                  <Mail className="w-5 h-5 text-blue-600" />
+                <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Mail className="w-6 h-6 text-white" strokeWidth={2.5} />
                 </div>
+
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-semibold mb-0.5">
                     Email
@@ -92,9 +107,10 @@ export default function Profile() {
 
               {/* Phone */}
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0 border border-green-100">
-                  <Phone className="w-5 h-5 text-green-600" />
+                <div className="w-12 h-12 rounded-2xl bg-green-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Phone className="w-6 h-6 text-white" strokeWidth={2.5} />
                 </div>
+
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-semibold mb-0.5">
                     Số điện thoại
@@ -105,9 +121,10 @@ export default function Profile() {
 
               {/* Location */}
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0 border border-purple-100">
-                  <MapPin className="w-5 h-5 text-purple-600" />
+                <div className="w-12 h-12 rounded-2xl bg-purple-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <MapPin className="w-6 h-6 text-white" strokeWidth={2.5} />
                 </div>
+
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-semibold mb-0.5">
                     Địa chỉ
@@ -120,9 +137,10 @@ export default function Profile() {
 
               {/* Join Date */}
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0 border border-amber-100">
-                  <Calendar className="w-5 h-5 text-amber-600" />
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Calendar className="w-6 h-6 text-white" strokeWidth={2.5} />
                 </div>
+
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-semibold mb-0.5">
                     Ngày tham gia
@@ -135,42 +153,49 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* 2. Resources Section */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <h2 className="text-base font-bold text-gray-800 mb-4 uppercase tracking-wide">
-          Tài nguyên & Liên kết
-        </h2>
+      {/* Resources Section */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex items-center gap-2 mb-3">
+          <Link className="w-4 h-4 text-gray-500" />
+          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Tài nguyên & Liên kết
+          </h2>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 h-full">
           {resources.map((resource) => {
             const Icon = resource.icon;
+
             return (
               <a
                 key={resource.id}
                 href={resource.link}
-                className="group bg-white rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 flex flex-col justify-between"
+                className="group bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between mb-4">
                     <div
-                      className={`w-12 h-12 rounded-xl ${resource.color} flex items-center justify-center shadow-sm`}
+                      className={`w-12 h-12 rounded-2xl ${resource.color} flex items-center justify-center shadow-sm flex-shrink-0`}
                     >
-                      <Icon className="w-6 h-6 text-white" />
+                      <Icon className="w-6 h-6 text-white" strokeWidth={2.5} />
                     </div>
-                    <ExternalLink className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+
+                    <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors mt-1" />
                   </div>
 
-                  <h3 className="text-base font-bold text-gray-800 mb-1.5 group-hover:text-blue-600 transition-colors">
+                  <h3 className="text-sm font-bold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors">
                     {resource.title}
                   </h3>
-                  <p className="text-sm text-gray-500">
+
+                  <p className="text-xs text-gray-500 line-clamp-2">
                     {resource.description}
                   </p>
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-gray-100">
-                  <span className="text-xs font-bold text-gray-400 group-hover:text-blue-600 transition-colors flex items-center gap-1">
-                    Nhấn để truy cập <span>→</span>
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <span className="text-xs font-bold text-gray-400 group-hover:text-blue-600 flex items-center gap-1.5 transition-colors">
+                    Nhấn để truy cập
+                    <ArrowRight className="w-3.5 h-3.5 transform transition-transform duration-300 group-hover:translate-x-1" />
                   </span>
                 </div>
               </a>

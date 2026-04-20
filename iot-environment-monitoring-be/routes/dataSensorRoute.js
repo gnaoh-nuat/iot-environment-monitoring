@@ -1,9 +1,6 @@
 const express = require("express");
 
-const {
-  getDataSensorHistory,
-  searchDataSensors,
-} = require("../controllers/dataSensorController");
+const { searchDataSensors } = require("../controllers/dataSensorController");
 
 const router = express.Router();
 
@@ -13,30 +10,6 @@ const router = express.Router();
  *   name: Data Sensors
  *   description: Data Sensor data APIs
  */
-
-/**
- * @swagger
- * /data-sensors/history:
- *   get:
- *     summary: Get Data sensor history by sensor name
- *     tags: [Sensors]
- *     parameters:
- *       - in: query
- *         name: sensorName
- *         required: true
- *         schema:
- *           type: string
- *         description: Name of sensor (temperature, humidity, light)
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *         description: Number of records (default 20)
- *     responses:
- *       200:
- *         description: Success
- */
-router.get("/history", getDataSensorHistory);
 
 /**
  * @swagger
