@@ -19,32 +19,27 @@ const resolveEffectStyles = (isEnabled, hasError, isLoading, index, color) => {
     };
   }
 
-  const styleType = index % 4;
-
-  if (styleType === 0) {
+  // ĐÃ SỬA LỖI: Chỉ gán cứng hiệu ứng quay cho riêng Quạt (Vị trí số 1)
+  if (index === 0) {
     return {
       effectClass: "animate-spin origin-center",
       shadowStyle: "none",
     };
   }
 
-  if (styleType === 1) {
-    return {
-      effectClass: "animate-pulse",
-      shadowStyle: `drop-shadow(0 0 8px ${color})`,
-    };
-  }
-
-  if (styleType === 2) {
+  // Gán cứng hiệu ứng nảy cho Máy hút ẩm / Bơm nước (Vị trí số 3)
+  if (index === 2) {
     return {
       effectClass: "animate-bounce",
       shadowStyle: `drop-shadow(0 4px 6px ${color}80)`,
     };
   }
 
+  // TẤT CẢ các thiết bị còn lại (Đèn 1, Đèn LED Xanh, Đèn LED Trắng...)
+  // chỉ dùng chung hiệu ứng tỏa sáng mượt mà.
   return {
     effectClass: "animate-pulse",
-    shadowStyle: `drop-shadow(0 0 6px ${color}66)`,
+    shadowStyle: `drop-shadow(0 0 8px ${color})`,
   };
 };
 
@@ -67,6 +62,7 @@ export default function DevicePanel({
         const hasError = !!device.errorMessage;
         const activeColor =
           device.color || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+
         const { effectClass, shadowStyle } = resolveEffectStyles(
           device.enabled,
           hasError,
@@ -115,7 +111,6 @@ export default function DevicePanel({
               ) : hasError ? (
                 <AlertCircle className="w-5 h-5 text-red-500" />
               ) : (
-                /* BẢN VÁ LỖI NẰM Ở ĐÂY: Tách thẻ div bọc ngoài để xử lý scale và opacity */
                 <div
                   className={`transition-all duration-300 flex items-center justify-center ${
                     device.enabled ? "scale-110" : "scale-100 opacity-60"
