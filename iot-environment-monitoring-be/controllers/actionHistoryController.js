@@ -16,6 +16,15 @@ const buildDayRange = (date) => {
   return { start, end };
 };
 
+const isDateOnlyQuery = (input) => {
+  const normalizedInput = String(input || "").trim();
+
+  return (
+    /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(normalizedInput) ||
+    /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(normalizedInput)
+  );
+};
+
 // ==========================================
 // TÌM KIẾM & LỌC LỊCH SỬ THAO TÁC
 // ==========================================
@@ -155,22 +164,7 @@ const searchActions = async (req, res, next) => {
               "Asia/Ho_Chi_Minh",
               Sequelize.col("Action.createdAt"),
             ),
-            "HH24:MI:SS DD/MM/YYYY",
-          ),
-          {
-            [Op.iLike]: `%${timeQuery}%`,
-          },
-        ),
-        // Dự phòng định dạng ngược
-        Sequelize.where(
-          Sequelize.fn(
-            "to_char",
-            Sequelize.fn(
-              "timezone",
-              "Asia/Ho_Chi_Minh",
-              Sequelize.col("Action.createdAt"),
-            ),
-            "DD/MM/YYYY HH24:MI:SS",
+            "YYYY/MM/DD HH24:MI:SS",
           ),
           {
             [Op.iLike]: `%${timeQuery}%`,
@@ -182,7 +176,9 @@ const searchActions = async (req, res, next) => {
         queryOrConditions.push({ id: Number.parseInt(normalizedQuery, 10) });
       }
 
-      const parsedFreeTextDate = parseDateInput(normalizedQuery);
+      const parsedFreeTextDate = isDateOnlyQuery(timeQuery)
+        ? parseDateInput(timeQuery)
+        : null;
       if (parsedFreeTextDate) {
         const { start: dayStart, end: dayEnd } =
           buildDayRange(parsedFreeTextDate);

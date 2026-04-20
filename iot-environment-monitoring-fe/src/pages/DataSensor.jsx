@@ -6,6 +6,7 @@ import SearchBar from "../components/filters/SearchBar";
 import FilterSelect from "../components/filters/FilterSelect";
 import PageSizeInput from "../components/filters/PageSizeInput";
 import SharedSortableTable from "../components/tables/SharedSortableTable";
+import { formatDateTime } from "../utils/dateTime";
 
 const SENSOR_OPTIONS = [
   { value: "all", label: "Tất cả cảm biến" },
@@ -63,21 +64,6 @@ const resolveSensorType = (sensorName) => {
   }
 
   return null;
-};
-
-const formatDateTime = (value) => {
-  if (!value) {
-    return "--";
-  }
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
 };
 
 const formatSensorValue = (sensorName, rawValue) => {
@@ -255,7 +241,7 @@ export default function DataSensor() {
           onChange={handleSearchChange}
           placeholder={
             searchType === "time"
-              ? "Dán thời gian (VD: 03:58:17 13/04/2026)..."
+              ? "Dán thời gian (VD: 2026/04/20 14:02:29)..."
               : "Tìm kiếm theo giá trị cảm biến..."
           }
         />

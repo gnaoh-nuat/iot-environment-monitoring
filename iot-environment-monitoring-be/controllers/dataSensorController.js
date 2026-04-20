@@ -57,6 +57,15 @@ const buildDayRange = (date) => {
   return { start, end };
 };
 
+const isDateOnlyQuery = (input) => {
+  const normalizedInput = String(input || "").trim();
+
+  return (
+    /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(normalizedInput) ||
+    /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(normalizedInput)
+  );
+};
+
 const searchDataSensors = async (req, res, next) => {
   try {
     let {
@@ -159,21 +168,7 @@ const searchDataSensors = async (req, res, next) => {
                 "Asia/Ho_Chi_Minh",
                 Sequelize.col("DataSensor.createdAt"),
               ),
-              "HH24:MI:SS DD/MM/YYYY",
-            ),
-            {
-              [Op.iLike]: `%${timeQuery}%`,
-            },
-          ),
-          Sequelize.where(
-            Sequelize.fn(
-              "to_char",
-              Sequelize.fn(
-                "timezone",
-                "Asia/Ho_Chi_Minh",
-                Sequelize.col("DataSensor.createdAt"),
-              ),
-              "DD/MM/YYYY HH24:MI:SS",
+              "YYYY/MM/DD HH24:MI:SS",
             ),
             {
               [Op.iLike]: `%${timeQuery}%`,
@@ -181,7 +176,9 @@ const searchDataSensors = async (req, res, next) => {
           ),
         ];
 
-        const parsedFreeTextDate = parseDateInput(normalizedQuery);
+        const parsedFreeTextDate = isDateOnlyQuery(timeQuery)
+          ? parseDateInput(timeQuery)
+          : null;
         if (parsedFreeTextDate) {
           const { start: dayStart, end: dayEnd } =
             buildDayRange(parsedFreeTextDate);

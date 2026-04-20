@@ -7,21 +7,7 @@ import SearchBar from "../components/filters/SearchBar";
 import FilterSelect from "../components/filters/FilterSelect";
 import PageSizeInput from "../components/filters/PageSizeInput";
 import SharedSortableTable from "../components/tables/SharedSortableTable";
-
-const formatDateTime = (value) => {
-  if (!value) {
-    return "--";
-  }
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
-};
+import { formatDateTime } from "../utils/dateTime";
 
 const toActionLabel = (action) => {
   const normalizedAction = String(action || "").toUpperCase();

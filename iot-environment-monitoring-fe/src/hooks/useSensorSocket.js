@@ -1,3 +1,5 @@
+// Dùng để kết nối WebSocket và nhận dữ liệu cảm biến thời gian thực từ server
+// Chia sẻ 1 kết nối socket duy nhất cho nhiều component
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
@@ -11,8 +13,9 @@ const DEVICE_EVENT =
   import.meta.env.VITE_SOCKET_DEVICE_EVENT || "device-status";
 
 let sharedSocket = null;
-let subscriberCount = 0;
+let subscriberCount = 0; // Đếm số component đang sử dụng hook để quản lý kết nối socket
 
+// Nếu có nhiều component sử dụng hook này, sẽ chỉ tạo 1 kết nối socket duy nhất và chia sẻ dữ liệu qua state của hook
 const getSharedSocket = () => {
   if (!sharedSocket) {
     sharedSocket = io(SOCKET_URL, {
@@ -28,6 +31,7 @@ const getSharedSocket = () => {
   return sharedSocket;
 };
 
+// Hook này sẽ trả về trạng thái kết nối, dữ liệu cảm biến mới nhất, dữ liệu thiết bị mới nhất và lỗi (nếu có)
 export const useSensorSocket = () => {
   const [connected, setConnected] = useState(false);
   const [lastSensorPacket, setLastSensorPacket] = useState(null);

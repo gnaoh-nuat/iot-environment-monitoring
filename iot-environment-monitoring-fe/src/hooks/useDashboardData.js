@@ -1,3 +1,5 @@
+// Hook này quản lý dữ liệu cảm biến và thiết bị cho dashboard
+// Bao gồm cả việc xử lý dữ liệu từ API và socket
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Thermometer,
@@ -11,8 +13,9 @@ import api from "../services/api";
 import { useSensorSocket } from "./useSensorSocket";
 
 const HISTORY_LIMIT = 15;
-const SENSOR_STALE_THRESHOLD = 10000;
+const SENSOR_STALE_THRESHOLD = 10000; // 10 giây không có cập nhật sẽ coi như cảm biến offline
 
+// Định dạng thời gian cho biểu đồ (chỉ hiển thị giờ:phút:giây)
 const formatChartTime = (dateValue) => {
   if (!dateValue) {
     return "--:--";
@@ -25,6 +28,7 @@ const formatChartTime = (dateValue) => {
   }).format(new Date(dateValue));
 };
 
+// Hàm này sẽ chuyển đổi dữ liệu lịch sử cảm biến từ backend thành định dạng phù hợp cho biểu đồ
 const buildChartDataFromHistories = (histories) => {
   const chartMap = new Map();
 
@@ -206,6 +210,7 @@ export const useDashboardData = () => {
 
     const loadDashboardSnapshot = async () => {
       try {
+        // Gọi API để lấy dữ liệu khởi tạo cho dashboard, bao gồm cả thông tin thiết bị và lịch sử cảm biến
         const response = await api.get("/dashboard/init", {
           params: { historyLimit: HISTORY_LIMIT },
         });
