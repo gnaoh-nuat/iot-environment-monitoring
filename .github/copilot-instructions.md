@@ -65,6 +65,8 @@ On Windows PowerShell, if `npm` is blocked by execution policy, run `npm.cmd` in
   - `.github/instructions/frontend-components.instructions.md`
 - Socket.io and MQTT realtime flow:
   - `.github/instructions/realtime-integration.instructions.md`
+- LLM behavior and change guidance:
+  - `.github/instructions/llm-behavior-guidelines.instructions.md`
 - Lint/testing quality checks:
   - `.github/instructions/testing-quality.instructions.md`
 
