@@ -1,145 +1,42 @@
 const { Op, Sequelize } = require("sequelize");
-const DataSensor = require("../models/SensorData");
-const Sensor = require("../models/Sensor");
-const AppError = require("../utils/appError");
-
-const normalizeText = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-const SENSOR_KEYWORDS = {
-  temperature: [
-    "temperature",
-    "temp",
-    "nhiet",
-    "nhiet do",
-    "nhiệt",
-    "nhiệt độ",
-  ],
-  humidity: ["humidity", "humid", "do am", "am", "độ ẩm", "do am"],
-  light: ["light", "anh sang", "lux", "sang", "ánh sáng"],
-};
-
-const buildSensorNameLikeConditions = (input) => {
-  const normalizedInput = normalizeText(input);
-  const relatedKeywords = Object.values(SENSOR_KEYWORDS)
-    .flat()
-    .filter(
-      (keyword) =>
-        normalizedInput.includes(normalizeText(keyword)) ||
-        normalizeText(keyword).includes(normalizedInput),
-    );
-
-  const candidates = Array.from(new Set([input, ...relatedKeywords])).filter(
-    Boolean,
-  );
-
-  return candidates.map((candidate) => ({
-    "$sensorInfo.name$": {
-      [Op.iLike]: `%${candidate}%`,
-    },
-  }));
-};
-
-const parseDateInput = (input) => {
-  const parsed = new Date(input);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const buildDayRange = (date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start, end };
-};
-
-const isDateOnlyQuery = (input) => {
-  const normalizedInput = String(input || "").trim();
-
-  return (
-    /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(normalizedInput) ||
-    /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(normalizedInput)
-  );
-};
+const { AppError, parsePagination, parseSort } = require("../utils");
+const { DataSensor, Sensor } = require("../models");
 
 const searchDataSensors = async (req, res, next) => {
   try {
-    let {
-      pageNo = 1,
-      pageSize = 10,
-      sensorName,
-      q,
-      searchType = "value",
-      sortBy = "createdAt",
-      sortOrder = "desc",
-    } = req.query;
+    const { pageNo, pageSize, offset } = parsePagination(req.query);
+    const orderClause = parseSort(
+      req.query,
+      ["id", "sensorName", "value", "createdAt"],
+      {
+        sensorName: {
+          model: { model: Sensor, as: "sensorInfo" },
+          field: "name",
+        },
+        value: {
+          field: Sequelize.cast(
+            Sequelize.col("DataSensor.value"),
+            "DOUBLE PRECISION",
+          ),
+        },
+      },
+    );
 
-    const parsedPageNo = Number.parseInt(pageNo, 10);
-    const parsedPageSize = Number.parseInt(pageSize, 10);
-
-    pageNo =
-      Number.isFinite(parsedPageNo) && parsedPageNo > 0 ? parsedPageNo : 1;
-    pageSize =
-      Number.isFinite(parsedPageSize) && parsedPageSize > 0
-        ? parsedPageSize
-        : 10;
-
-    const offset = (pageNo - 1) * pageSize;
-
-    const where = {};
-    const andConditions = [];
-
-    // ================= FILTER SENSOR =================
-    if (sensorName && sensorName !== "all") {
-      const sensorNameConditions = buildSensorNameLikeConditions(sensorName);
-      andConditions.push(
-        sensorNameConditions.length > 1
-          ? { [Op.or]: sensorNameConditions }
-          : sensorNameConditions[0],
-      );
-    }
+    const { sensorName, q, searchType = "value" } = req.query;
 
     const normalizedSearchType = String(searchType || "value").toLowerCase();
     if (!["value", "time"].includes(normalizedSearchType)) {
       throw new AppError(400, "searchType không hợp lệ");
     }
 
-    const normalizedSortOrder = String(sortOrder || "desc").toLowerCase();
-    if (!["asc", "desc"].includes(normalizedSortOrder)) {
-      throw new AppError(400, "sortOrder không hợp lệ");
-    }
+    const andConditions = [];
 
-    const normalizedSortBy = String(sortBy || "createdAt");
-    if (
-      !["id", "sensorName", "value", "createdAt"].includes(normalizedSortBy)
-    ) {
-      throw new AppError(400, "sortBy không hợp lệ");
-    }
-
-    let orderClause = [["createdAt", normalizedSortOrder.toUpperCase()]];
-    if (["id", "createdAt"].includes(normalizedSortBy)) {
-      orderClause = [[normalizedSortBy, normalizedSortOrder.toUpperCase()]];
-    }
-    if (normalizedSortBy === "value") {
-      orderClause = [
-        [
-          Sequelize.cast(Sequelize.col("DataSensor.value"), "DOUBLE PRECISION"),
-          normalizedSortOrder.toUpperCase(),
-        ],
-      ];
-    }
-    if (normalizedSortBy === "sensorName") {
-      orderClause = [
-        [
-          { model: Sensor, as: "sensorInfo" },
-          "name",
-          normalizedSortOrder.toUpperCase(),
-        ],
-      ];
+    if (sensorName && sensorName !== "all") {
+      andConditions.push({
+        "$sensorInfo.name$": {
+          [Op.iLike]: `%${sensorName}%`,
+        },
+      });
     }
 
     // ================= FREE-TEXT SEARCH (BY SEARCH TYPE) =================
@@ -154,12 +51,11 @@ const searchDataSensors = async (req, res, next) => {
       }
 
       if (normalizedSearchType === "time") {
-        // Xóa dấu phẩy nếu trình duyệt copy bị dính (vd: 03:58:17, 13/04/2026 -> 03:58:17 13/04/2026)
         const timeQuery = normalizedQuery
           .replace(/,/g, "")
           .replace(/\s+/g, " ");
 
-        const timeSearchConditions = [
+        andConditions.push(
           Sequelize.where(
             Sequelize.fn(
               "to_char",
@@ -174,34 +70,13 @@ const searchDataSensors = async (req, res, next) => {
               [Op.iLike]: `%${timeQuery}%`,
             },
           ),
-        ];
-
-        const parsedFreeTextDate = isDateOnlyQuery(timeQuery)
-          ? parseDateInput(timeQuery)
-          : null;
-        if (parsedFreeTextDate) {
-          const { start: dayStart, end: dayEnd } =
-            buildDayRange(parsedFreeTextDate);
-          timeSearchConditions.push({
-            createdAt: {
-              [Op.between]: [dayStart, dayEnd],
-            },
-          });
-        }
-
-        andConditions.push({
-          [Op.or]: timeSearchConditions,
-        });
+        );
       }
-    }
-
-    if (andConditions.length > 0) {
-      where[Op.and] = andConditions;
     }
 
     // ================= QUERY =================
     const { count, rows } = await DataSensor.findAndCountAll({
-      where,
+      where: andConditions.length > 0 ? { [Op.and]: andConditions } : {},
       include: [
         {
           model: Sensor,

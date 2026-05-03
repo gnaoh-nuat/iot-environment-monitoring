@@ -1,23 +1,24 @@
-const Sensor = require("../models/Sensor");
-const AppError = require("../utils/appError");
+const { Sensor } = require("../models");
+const { AppError } = require("../utils");
 
-// ===== CREATE SENSOR =====
+// Helper nội bộ để DRY (Don't Repeat Yourself) logic tìm kiếm và bắt lỗi 404
+const findSensorOr404 = async (id) => {
+  const sensor = await Sensor.findByPk(id);
+  if (!sensor) throw new AppError(404, "Sensor not found");
+  return sensor;
+};
+
+// ===== CRUD OPERATIONS =====
 const createSensor = async (req, res, next) => {
   try {
     const { name } = req.body;
-
-    if (!name) {
-      throw new AppError(400, "Sensor name is required");
-    }
+    if (!name) throw new AppError(400, "Sensor name is required");
 
     const existed = await Sensor.findOne({ where: { name } });
-    if (existed) {
-      throw new AppError(400, "Sensor already exists");
-    }
+    if (existed) throw new AppError(400, "Sensor already exists");
 
     const sensor = await Sensor.create({ name });
-
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       data: sensor,
       message: "Sensor created successfully",
@@ -27,14 +28,10 @@ const createSensor = async (req, res, next) => {
   }
 };
 
-// ===== GET ALL SENSOR =====
 const getAllSensors = async (req, res, next) => {
   try {
-    const sensors = await Sensor.findAll({
-      order: [["createdAt", "DESC"]],
-    });
-
-    return res.status(200).json({
+    const sensors = await Sensor.findAll({ order: [["createdAt", "DESC"]] });
+    res.status(200).json({
       success: true,
       data: sensors,
       message: "Sensors retrieved successfully",
@@ -44,18 +41,10 @@ const getAllSensors = async (req, res, next) => {
   }
 };
 
-// ===== GET SENSOR BY ID =====
 const getSensorById = async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    const sensor = await Sensor.findByPk(id);
-
-    if (!sensor) {
-      throw new AppError(404, "Sensor not found");
-    }
-
-    return res.status(200).json({
+    const sensor = await findSensorOr404(req.params.id);
+    res.status(200).json({
       success: true,
       data: sensor,
       message: "Sensor retrieved successfully",
@@ -65,31 +54,21 @@ const getSensorById = async (req, res, next) => {
   }
 };
 
-// ===== UPDATE SENSOR =====
 const updateSensor = async (req, res, next) => {
   try {
-    const { id } = req.params;
     const { name } = req.body;
+    if (!name) throw new AppError(400, "Sensor name is required");
 
-    const sensor = await Sensor.findByPk(id);
+    const sensor = await findSensorOr404(req.params.id);
 
-    if (!sensor) {
-      throw new AppError(404, "Sensor not found");
-    }
-
-    if (!name) {
-      throw new AppError(400, "Sensor name is required");
-    }
-
-    // check duplicate
+    // Kiểm tra trùng lặp tên (ngoại trừ chính nó)
     const existed = await Sensor.findOne({ where: { name } });
     if (existed && existed.id !== sensor.id) {
       throw new AppError(400, "Sensor name already exists");
     }
 
     await sensor.update({ name });
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: sensor,
       message: "Sensor updated successfully",
@@ -99,20 +78,11 @@ const updateSensor = async (req, res, next) => {
   }
 };
 
-// ===== DELETE SENSOR =====
 const deleteSensor = async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    const sensor = await Sensor.findByPk(id);
-
-    if (!sensor) {
-      throw new AppError(404, "Sensor not found");
-    }
-
+    const sensor = await findSensorOr404(req.params.id);
     await sensor.destroy();
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: null,
       message: "Sensor deleted successfully",

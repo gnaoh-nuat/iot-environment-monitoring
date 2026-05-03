@@ -1,33 +1,19 @@
 const cron = require("node-cron");
 const { Op } = require("sequelize");
-const DataSensor = require("../models/SensorData");
-
-const DEFAULT_CRON_EXPRESSION = "0 0 * * *";
-const DEFAULT_RETENTION_DAYS = 1;
-
-const parsePositiveInt = (value, fallback) => {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-};
+const { DataSensor } = require("../models");
 
 const startCleanupDataSensorJob = () => {
-  const isEnabled =
-    String(
-      process.env.ENABLE_SENSOR_DATA_CLEANUP_CRON || "true",
-    ).toLowerCase() !== "false";
-
-  if (!isEnabled) {
-    console.log(
-      "[CRON] Data sensor cleanup disabled (ENABLE_SENSOR_DATA_CLEANUP_CRON=false)",
-    );
+  // 1. Tối ưu: Chỉ cần check nếu explicitly set là "false"
+  if (process.env.ENABLE_SENSOR_DATA_CLEANUP_CRON === "false") {
+    console.log("[CRON] Data sensor cleanup disabled.");
     return null;
   }
 
-  const cronExpression =
-    process.env.DATA_SENSOR_CLEANUP_CRON || DEFAULT_CRON_EXPRESSION;
-  const retentionDays = parsePositiveInt(
-    process.env.DATA_SENSOR_RETENTION_DAYS,
-    DEFAULT_RETENTION_DAYS,
+  // 2. Tối ưu: Inline fallback, bỏ helper parsePositiveInt và các hằng số thừa
+  const cronExpression = process.env.DATA_SENSOR_CLEANUP_CRON || "0 0 * * *";
+  const retentionDays = Math.max(
+    1,
+    Number(process.env.DATA_SENSOR_RETENTION_DAYS) || 1,
   );
 
   const task = cron.schedule(cronExpression, async () => {
@@ -37,16 +23,14 @@ const startCleanupDataSensorJob = () => {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-      const deleted = await DataSensor.destroy({
+      const deletedCount = await DataSensor.destroy({
         where: {
-          createdAt: {
-            [Op.lt]: cutoffDate,
-          },
+          createdAt: { [Op.lt]: cutoffDate },
         },
       });
 
       console.log(
-        `[CRON] Deleted ${deleted} old records older than ${retentionDays} day(s)`,
+        `[CRON] Deleted ${deletedCount} records older than ${retentionDays} day(s)`,
       );
     } catch (err) {
       console.error("[CRON] Error:", err);
@@ -54,9 +38,8 @@ const startCleanupDataSensorJob = () => {
   });
 
   console.log(
-    `[CRON] Data sensor cleanup scheduled at "${cronExpression}" (retention ${retentionDays} day(s))`,
+    `[CRON] Scheduled at "${cronExpression}" (retention: ${retentionDays} day(s))`,
   );
-
   return task;
 };
 

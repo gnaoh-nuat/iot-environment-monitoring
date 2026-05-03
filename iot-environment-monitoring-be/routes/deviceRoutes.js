@@ -7,14 +7,50 @@ const {
   getDeviceById,
   updateDevice,
   deleteDevice,
+  controlDeviceFromDashboard,
 } = require("../controllers/deviceController");
 
 /**
  * @swagger
  * tags:
  *   name: Devices
- *   description: Device management APIs
+ *   description: Device management and control APIs
  */
+
+/**
+ * @swagger
+ * /devices/control:
+ *   post:
+ *     summary: Send device control command and wait for hardware acknowledgment
+ *     tags: [Devices]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - deviceId
+ *               - action
+ *             properties:
+ *               deviceId:
+ *                 type: integer
+ *                 example: 1
+ *               action:
+ *                 type: string
+ *                 enum: [ON, OFF]
+ *                 example: ON
+ *     responses:
+ *       202:
+ *         description: Command accepted and processing
+ *       400:
+ *         description: Invalid request payload
+ *       404:
+ *         description: Device not found
+ *       409:
+ *         description: Device already has a pending command
+ */
+router.post("/control", controlDeviceFromDashboard);
 
 /**
  * @swagger

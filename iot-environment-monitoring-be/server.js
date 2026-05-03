@@ -2,75 +2,54 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
-
-const errorHandler = require("./middlewares/errorHandler");
-const rootRouter = require("./routes");
-const sequelize = require("./config/database");
 const swaggerUi = require("swagger-ui-express");
-const swaggerSpecs = require("./config/swagger");
-const initializeAssociations = require("./models/associations");
-const { startCleanupDataSensorJob } = require("./cron/cleanupDataSensor");
 
+const sequelize = require("./config/database");
+const swaggerSpecs = require("./config/swagger");
+const rootRouter = require("./routes");
+const errorHandler = require("./middlewares/errorHandler");
+const { initializeAssociations } = require("./models");
+const { startCleanupDataSensorJob } = require("./cron/cleanupDataSensor");
 const { initSocket } = require("./socket/socketHandler");
 
-// ===== INIT APP =====
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 8080;
 
-// 🔥 TẠO HTTP SERVER (QUAN TRỌNG)
-const server = http.createServer(app);
-
-// ===== MIDDLEWARE =====
+// ===== 1. MIDDLEWARES & DOCS =====
+app.use(cors()); // Tối ưu: Dùng mặc định của cors đã bao gồm origin: "*" và các method cơ bản
 app.use(express.json());
 
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  }),
-);
-
-// ===== SOCKET.IO =====
-initSocket(server);
-
-// ===== MQTT (QUAN TRỌNG) =====
-require("./mqtt/mqttClient");
-
-// ===== SWAGGER =====
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+app.get("/", (req, res) => res.redirect("/api-docs"));
 
-// Redirect root URL to Swagger for quick API testing.
-app.get("/", (req, res) => {
-  res.redirect("/api-docs");
-});
+// ===== 2. INIT SERVICES =====
+initSocket(server);
+require("./mqtt/mqttClient"); // Kích hoạt kết nối MQTT
 
+// ===== 3. BOOTSTRAP APP =====
 const startServer = async () => {
   try {
-    // Ensure associations are initialized before any query runs.
     initializeAssociations();
 
+    // Khởi tạo và đồng bộ Database
     await sequelize.authenticate();
-    console.log("Database connected successfully.");
-
     await sequelize.sync({ alter: true });
-    console.log("Database schema synchronized successfully.");
+    console.log("[DB] Connected & Schema synchronized successfully.");
 
-    // Start maintenance jobs after DB is ready.
+    // Chạy cron job dọn dẹp
     startCleanupDataSensorJob();
 
-    // Register business routes only after DB is ready.
+    // Mount Routes & Error Handler sau khi DB đã sẵn sàng
     app.use(rootRouter);
-
-    // ===== ERROR HANDLER =====
     app.use(errorHandler);
 
     server.listen(PORT, () => {
-      console.log(`🚀 Server is running on http://localhost:${PORT}`);
-      console.log("SERVER IS READY TO HANDLE REQUESTS !");
+      console.log(`🚀 API Docs: http://localhost:${PORT}/api-docs`);
+      console.log("⚡ SERVER IS READY TO HANDLE REQUESTS!");
     });
   } catch (error) {
-    console.error("Unable to start server due to database error:", error);
+    console.error("[FATAL] Unable to start server:", error);
     process.exit(1);
   }
 };

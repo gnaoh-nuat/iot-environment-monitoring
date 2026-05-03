@@ -1,13 +1,25 @@
-const Device = require("../models/Device");
-const Action = require("../models/ActionHistory");
+const { Device, ActionHistory: Action } = require("../models");
 const { Op } = require("sequelize");
-const AppError = require("../utils/appError");
+const { AppError } = require("../utils");
 const sequelize = require("../config/database");
 const { publishCommand } = require("../mqtt/mqttClient");
 const { emitSensorData } = require("../socket/socketHandler");
 const { scheduleActionTimeout } = require("../services/deviceControlTracker");
 
 const socketDeviceTopic = process.env.SOCKET_DEVICE_TOPIC || "device-status";
+
+const findDeviceOr404 = async (id, transaction) => {
+  const device = await Device.findByPk(
+    id,
+    transaction ? { transaction } : undefined,
+  );
+
+  if (!device) {
+    throw new AppError(404, "Device not found");
+  }
+
+  return device;
+};
 
 // ===== CREATE DEVICE =====
 const createDevice = async (req, res, next) => {
@@ -49,12 +61,7 @@ const getAllDevices = async (req, res, next) => {
 const getDeviceById = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    const device = await Device.findByPk(id);
-
-    if (!device) {
-      throw new AppError(404, "Device not found");
-    }
+    const device = await findDeviceOr404(id);
 
     return res.status(200).json({
       success: true,
@@ -76,11 +83,7 @@ const updateDevice = async (req, res, next) => {
       throw new AppError(400, "Device name is required");
     }
 
-    const device = await Device.findByPk(id);
-
-    if (!device) {
-      throw new AppError(404, "Device not found");
-    }
+    const device = await findDeviceOr404(id);
 
     await device.update({ name });
 
@@ -98,12 +101,7 @@ const updateDevice = async (req, res, next) => {
 const deleteDevice = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    const device = await Device.findByPk(id);
-
-    if (!device) {
-      throw new AppError(404, "Device not found");
-    }
+    const device = await findDeviceOr404(id);
 
     await device.destroy();
 
@@ -133,10 +131,7 @@ const controlDeviceFromDashboard = async (req, res, next) => {
       throw new AppError(400, "Action must be ON or OFF");
     }
 
-    const device = await Device.findByPk(deviceId, { transaction });
-    if (!device) {
-      throw new AppError(404, "Device not found");
-    }
+    await findDeviceOr404(deviceId, transaction);
 
     const existingPendingAction = await Action.findOne({
       where: {
@@ -188,7 +183,7 @@ const controlDeviceFromDashboard = async (req, res, next) => {
           order: [["createdAt", "DESC"]],
         });
 
-        const revertedStatus = previousAction ? previousAction.status : "OFF";
+        const revertedStatus = previousAction?.status || "OFF";
 
         await actionRow.update({ status: revertedStatus });
 

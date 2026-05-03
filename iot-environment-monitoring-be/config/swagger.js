@@ -1,7 +1,7 @@
 const swaggerJsdoc = require("swagger-jsdoc");
-require("dotenv").config();
 
-const options = {
+// Xuất trực tiếp kết quả, bỏ qua các biến trung gian options/specs
+module.exports = swaggerJsdoc({
   definition: {
     openapi: "3.0.0",
     info: {
@@ -17,10 +17,5 @@ const options = {
       },
     ],
   },
-
   apis: ["./routes/*.js"],
-};
-
-const specs = swaggerJsdoc(options);
-
-module.exports = specs;
+});

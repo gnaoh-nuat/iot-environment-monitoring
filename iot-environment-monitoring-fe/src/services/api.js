@@ -1,12 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-/**
- * Axios instance với default config
- */
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -14,33 +9,19 @@ const api = axios.create({
 });
 
 /**
- * Request interceptor
- */
-api.interceptors.request.use(
-  (config) => {
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  },
-);
-
-/**
- * Response interceptor - handle error, refresh token, etc
+ * Response interceptor: Tự động trích xuất data và format lỗi đồng nhất
  */
 api.interceptors.response.use(
-  (response) => {
-    return response.data; // Trả về data trực tiếp thay vì response envelope
-  },
+  (response) => response.data,
   (error) => {
-    const errorMessage =
+    const message =
       error.response?.data?.message || error.message || "Unknown error";
 
-    console.error("API Error:", errorMessage);
+    console.error("API Error:", message);
 
     return Promise.reject({
       status: error.response?.status,
-      message: errorMessage,
+      message,
       data: error.response?.data,
     });
   },

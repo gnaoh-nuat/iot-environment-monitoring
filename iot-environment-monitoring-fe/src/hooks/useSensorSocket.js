@@ -15,7 +15,6 @@ const DEVICE_EVENT =
 let sharedSocket = null;
 let subscriberCount = 0; // Đếm số component đang sử dụng hook để quản lý kết nối socket
 
-// Nếu có nhiều component sử dụng hook này, sẽ chỉ tạo 1 kết nối socket duy nhất và chia sẻ dữ liệu qua state của hook
 const getSharedSocket = () => {
   if (!sharedSocket) {
     sharedSocket = io(SOCKET_URL, {
@@ -27,11 +26,9 @@ const getSharedSocket = () => {
       reconnectionDelayMax: 5000,
     });
   }
-
   return sharedSocket;
 };
 
-// Hook này sẽ trả về trạng thái kết nối, dữ liệu cảm biến mới nhất, dữ liệu thiết bị mới nhất và lỗi (nếu có)
 export const useSensorSocket = () => {
   const [connected, setConnected] = useState(false);
   const [lastSensorPacket, setLastSensorPacket] = useState(null);
@@ -42,42 +39,33 @@ export const useSensorSocket = () => {
     const socket = getSharedSocket();
     subscriberCount += 1;
 
-    const handleConnect = () => {
+    // 1. Tối ưu: Định nghĩa các handler ngắn gọn
+    const onConnect = () => {
       setConnected(true);
       setError(null);
     };
-
-    const handleSensorEvent = (packet) => {
-      setLastSensorPacket(packet);
-    };
-
-    const handleDeviceEvent = (packet) => {
-      setLastDevicePacket(packet);
-    };
-
-    const handleConnectError = (socketError) => {
+    const onDisconnect = () => setConnected(false);
+    const onError = (socketError) => {
       setError(socketError.message || "Socket connection failed");
       setConnected(false);
     };
 
-    const handleDisconnect = () => {
-      setConnected(false);
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on(SENSOR_EVENT, handleSensorEvent);
-    socket.on(DEVICE_EVENT, handleDeviceEvent);
-    socket.on("connect_error", handleConnectError);
-    socket.on("disconnect", handleDisconnect);
+    // 2. Tối ưu: Truyền thẳng state setter vào socket.on
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onError);
+    socket.on(SENSOR_EVENT, setLastSensorPacket);
+    socket.on(DEVICE_EVENT, setLastDevicePacket);
 
     socket.connect();
 
     return () => {
-      socket.off("connect", handleConnect);
-      socket.off(SENSOR_EVENT, handleSensorEvent);
-      socket.off(DEVICE_EVENT, handleDeviceEvent);
-      socket.off("connect_error", handleConnectError);
-      socket.off("disconnect", handleDisconnect);
+      // 3. Cleanup tương ứng
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onError);
+      socket.off(SENSOR_EVENT, setLastSensorPacket);
+      socket.off(DEVICE_EVENT, setLastDevicePacket);
 
       subscriberCount = Math.max(0, subscriberCount - 1);
 
@@ -88,10 +76,5 @@ export const useSensorSocket = () => {
     };
   }, []);
 
-  return {
-    connected,
-    lastSensorPacket,
-    lastDevicePacket,
-    error,
-  };
+  return { connected, lastSensorPacket, lastDevicePacket, error };
 };

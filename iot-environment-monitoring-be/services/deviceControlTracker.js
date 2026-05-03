@@ -1,29 +1,27 @@
 const pendingTimeouts = new Map();
 
-const normalizeActionKey = (actionId) => String(actionId);
-
 const scheduleActionTimeout = (actionId, callback, timeoutMs = 10000) => {
-  const actionKey = normalizeActionKey(actionId);
-  clearActionTimeout(actionKey);
+  const key = String(actionId);
+
+  // Dọn dẹp timeout cũ nếu có trước khi đặt mới
+  clearActionTimeout(key);
 
   const timeoutId = setTimeout(async () => {
-    pendingTimeouts.delete(actionKey);
+    pendingTimeouts.delete(key);
     await callback();
   }, timeoutMs);
 
-  pendingTimeouts.set(actionKey, timeoutId);
+  pendingTimeouts.set(key, timeoutId);
 };
 
 const clearActionTimeout = (actionId) => {
-  const actionKey = normalizeActionKey(actionId);
-  const timeoutId = pendingTimeouts.get(actionKey);
-  if (timeoutId) {
-    clearTimeout(timeoutId);
-    pendingTimeouts.delete(actionKey);
-    return true;
-  }
+  const key = String(actionId);
 
-  return false;
+  // Tối ưu: Chỉ cần check và xóa, không cần trả về true/false thừa thãi
+  if (pendingTimeouts.has(key)) {
+    clearTimeout(pendingTimeouts.get(key));
+    pendingTimeouts.delete(key);
+  }
 };
 
 module.exports = {

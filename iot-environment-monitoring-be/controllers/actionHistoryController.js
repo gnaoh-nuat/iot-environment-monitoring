@@ -1,20 +1,6 @@
-const Action = require("../models/ActionHistory");
-const Device = require("../models/Device");
 const { Op, Sequelize } = require("sequelize");
-const AppError = require("../utils/appError");
-
-const parseDateInput = (input) => {
-  const parsed = new Date(input);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const buildDayRange = (date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start, end };
-};
+const { AppError, parsePagination, parseSort } = require("../utils");
+const { ActionHistory: Action, Device } = require("../models");
 
 const isValidTimeZone = (value) => {
   try {
@@ -25,146 +11,75 @@ const isValidTimeZone = (value) => {
   }
 };
 
-const isDateOnlyQuery = (input) => {
-  const normalizedInput = String(input || "").trim();
-
-  return (
-    /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(normalizedInput) ||
-    /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(normalizedInput)
-  );
+const STATUS_GROUP_HANDLERS = {
+  success: (conditions) => {
+    conditions.push({ status: { [Op.in]: ["ON", "OFF"] } });
+    conditions.push(
+      Sequelize.where(
+        Sequelize.col("Action.action"),
+        Op.eq,
+        Sequelize.col("Action.status"),
+      ),
+    );
+  },
+  pending: (conditions) => conditions.push({ status: "PENDING" }),
+  failure: (conditions) => {
+    conditions.push({ status: { [Op.ne]: "PENDING" } });
+    conditions.push({
+      [Op.or]: [
+        { status: { [Op.notIn]: ["ON", "OFF", "PENDING"] } },
+        {
+          [Op.and]: [
+            { status: { [Op.in]: ["ON", "OFF"] } },
+            Sequelize.where(
+              Sequelize.col("Action.action"),
+              Op.ne,
+              Sequelize.col("Action.status"),
+            ),
+          ],
+        },
+      ],
+    });
+  },
 };
 
-// ==========================================
-// TÌM KIẾM & LỌC LỊCH SỬ THAO TÁC
-// ==========================================
 const searchActions = async (req, res, next) => {
   try {
-    let {
-      pageNo = 1,
-      pageSize = 10,
-      deviceName,
-      action,
-      statusGroup,
-      q,
-      sortBy = "createdAt",
-      sortOrder = "desc",
-    } = req.query;
+    const { pageNo, pageSize, offset } = parsePagination(req.query);
+    const orderClause = parseSort(
+      req.query,
+      ["id", "deviceName", "action", "createdAt", "status"],
+      {
+        deviceName: {
+          model: { model: Device, as: "deviceInfo" },
+          field: "name",
+        },
+      },
+    );
 
-    const parsedPageNo = Number.parseInt(pageNo, 10);
-    const parsedPageSize = Number.parseInt(pageSize, 10);
-
-    pageNo =
-      Number.isFinite(parsedPageNo) && parsedPageNo > 0 ? parsedPageNo : 1;
-    pageSize =
-      Number.isFinite(parsedPageSize) && parsedPageSize > 0
-        ? parsedPageSize
-        : 10;
-
-    const normalizedSortOrder = String(sortOrder || "desc").toLowerCase();
-    if (!["asc", "desc"].includes(normalizedSortOrder)) {
-      throw new AppError(400, "sortOrder không hợp lệ");
-    }
-
-    const normalizedSortBy = String(sortBy || "createdAt");
-    if (
-      !["id", "deviceName", "action", "createdAt", "status"].includes(
-        normalizedSortBy,
-      )
-    ) {
-      throw new AppError(400, "sortBy không hợp lệ");
-    }
-
-    let orderClause = [["createdAt", normalizedSortOrder.toUpperCase()]];
-    if (["id", "action", "createdAt", "status"].includes(normalizedSortBy)) {
-      orderClause = [[normalizedSortBy, normalizedSortOrder.toUpperCase()]];
-    }
-    if (normalizedSortBy === "deviceName") {
-      orderClause = [
-        [
-          { model: Device, as: "deviceInfo" },
-          "name",
-          normalizedSortOrder.toUpperCase(),
-        ],
-      ];
-    }
-
-    const offset = (pageNo - 1) * pageSize;
-
+    const { deviceName, action, statusGroup, q } = req.query;
     const where = {};
     const andConditions = [];
     const deviceWhere = {};
 
-    // FILTER THEO TÊN THIẾT BỊ
-    if (deviceName && deviceName !== "all") {
-      deviceWhere.name = deviceName;
-    }
-
-    // FILTER THEO HÀNH ĐỘNG
-    if (action && action !== "all") {
+    if (deviceName && deviceName !== "all") deviceWhere.name = deviceName;
+    if (action && action !== "all")
       andConditions.push({ action: String(action).toUpperCase() });
-    }
 
-    // FILTER THEO NHÓM TRẠNG THÁI
     if (statusGroup && statusGroup !== "all") {
-      const normalizedStatusGroup = String(statusGroup).toLowerCase();
-
-      if (normalizedStatusGroup === "success") {
-        andConditions.push({
-          status: { [Op.in]: ["ON", "OFF"] },
-        });
-        andConditions.push(
-          Sequelize.where(
-            Sequelize.col("Action.action"),
-            Op.eq,
-            Sequelize.col("Action.status"),
-          ),
-        );
-      } else if (normalizedStatusGroup === "pending") {
-        andConditions.push({ status: "PENDING" });
-      } else if (normalizedStatusGroup === "failure") {
-        andConditions.push({ status: { [Op.ne]: "PENDING" } });
-        andConditions.push({
-          [Op.or]: [
-            { status: { [Op.notIn]: ["ON", "OFF", "PENDING"] } },
-            {
-              [Op.and]: [
-                { status: { [Op.in]: ["ON", "OFF"] } },
-                Sequelize.where(
-                  Sequelize.col("Action.action"),
-                  Op.ne,
-                  Sequelize.col("Action.status"),
-                ),
-              ],
-            },
-          ],
-        });
-      } else {
-        throw new AppError(400, "statusGroup không hợp lệ");
-      }
+      const handler = STATUS_GROUP_HANDLERS[String(statusGroup).toLowerCase()];
+      if (!handler) throw new AppError(400, "statusGroup không hợp lệ");
+      handler(andConditions);
     }
 
-    // FREE-TEXT SEARCH (AUTO-INFER)
     const normalizedQuery = String(q || "").trim();
     if (normalizedQuery) {
-      // Xóa dấu phẩy nếu dính từ UI
       const timeQuery = normalizedQuery.replace(/,/g, "").replace(/\s+/g, " ");
 
       const queryOrConditions = [
-        {
-          action: {
-            [Op.iLike]: `%${normalizedQuery}%`,
-          },
-        },
-        {
-          status: {
-            [Op.iLike]: `%${normalizedQuery}%`,
-          },
-        },
-        {
-          "$deviceInfo.name$": {
-            [Op.iLike]: `%${normalizedQuery}%`,
-          },
-        },
+        { action: { [Op.iLike]: `%${normalizedQuery}%` } },
+        { status: { [Op.iLike]: `%${normalizedQuery}%` } },
+        { "$deviceInfo.name$": { [Op.iLike]: `%${normalizedQuery}%` } },
         Sequelize.where(
           Sequelize.fn(
             "to_char",
@@ -175,39 +90,18 @@ const searchActions = async (req, res, next) => {
             ),
             "YYYY/MM/DD HH24:MI:SS",
           ),
-          {
-            [Op.iLike]: `%${timeQuery}%`,
-          },
+          { [Op.iLike]: `%${timeQuery}%` },
         ),
       ];
 
-      if (/^\d+$/.test(normalizedQuery)) {
+      if (/^\d+$/.test(normalizedQuery))
         queryOrConditions.push({ id: Number.parseInt(normalizedQuery, 10) });
-      }
 
-      const parsedFreeTextDate = isDateOnlyQuery(timeQuery)
-        ? parseDateInput(timeQuery)
-        : null;
-      if (parsedFreeTextDate) {
-        const { start: dayStart, end: dayEnd } =
-          buildDayRange(parsedFreeTextDate);
-        queryOrConditions.push({
-          createdAt: {
-            [Op.between]: [dayStart, dayEnd],
-          },
-        });
-      }
-
-      andConditions.push({
-        [Op.or]: queryOrConditions,
-      });
+      andConditions.push({ [Op.or]: queryOrConditions });
     }
 
-    if (andConditions.length > 0) {
-      where[Op.and] = andConditions;
-    }
+    if (andConditions.length > 0) where[Op.and] = andConditions;
 
-    // THỰC THI QUERY TỪ DATABASE
     const { count, rows } = await Action.findAndCountAll({
       where,
       include: [
@@ -226,18 +120,15 @@ const searchActions = async (req, res, next) => {
       subQuery: false,
     });
 
-    const totalPages = Math.ceil(count / pageSize) || 1;
-
     return res.status(200).json({
       success: true,
       data: rows,
       message: "Actions retrieved successfully",
       pagination: {
         totalRecords: count,
-        totalPages,
+        totalPages: Math.ceil(count / pageSize) || 1,
         currentPage: pageNo,
         pageSize,
-        // Backward compatibility fields
         pageNo,
         total: count,
       },
@@ -252,48 +143,28 @@ const getDeviceManagementDailyStats = async (req, res, next) => {
     const selectedDate = String(req.query.date || "").trim();
     const timezone = String(req.query.timezone || "Asia/Ho_Chi_Minh").trim();
 
-    if (!selectedDate) {
-      throw new AppError(400, "date là bắt buộc (YYYY-MM-DD)");
-    }
-
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate))
       throw new AppError(
         400,
         "date không hợp lệ, định dạng đúng là YYYY-MM-DD",
       );
-    }
-
-    if (!isValidTimeZone(timezone)) {
+    if (!isValidTimeZone(timezone))
       throw new AppError(400, "timezone không hợp lệ");
-    }
 
     const devices = await Device.findAll({
       attributes: ["id", "name"],
       order: [["createdAt", "ASC"]],
       limit: 5,
     });
-
-    if (devices.length === 0) {
+    if (devices.length === 0)
       return res.status(200).json({
         success: true,
-        data: {
-          selectedDate,
-          timezone,
-          devices: [],
-          countsByDevice: [],
-        },
-        message: "Không có thiết bị để thống kê",
+        data: { selectedDate, timezone, devices: [], countsByDevice: [] },
       });
-    }
 
-    const deviceIds = devices.map((device) => Number(device.id));
-
-    const countRows = await Action.findAll({
-      attributes: [
-        "deviceId",
-        "action",
-        [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
-      ],
+    const deviceIds = devices.map((d) => d.id);
+    const actionsInDay = await Action.findAll({
+      attributes: ["deviceId", "action"],
       where: {
         deviceId: { [Op.in]: deviceIds },
         status: { [Op.in]: ["ON", "OFF"] },
@@ -317,63 +188,36 @@ const getDeviceManagementDailyStats = async (req, res, next) => {
           ),
         ],
       },
-      group: ["deviceId", "action"],
       raw: true,
     });
 
-    const countMap = {};
-
-    countRows.forEach((row) => {
-      const deviceIdKey = String(row.deviceId);
-      const actionKey = String(row.action || "").toUpperCase();
-      const countValue = Number(row.count || 0);
-
-      if (!countMap[deviceIdKey]) {
-        countMap[deviceIdKey] = { onCount: 0, offCount: 0 };
-      }
-
-      if (actionKey === "ON") {
-        countMap[deviceIdKey].onCount = countValue;
-      }
-
-      if (actionKey === "OFF") {
-        countMap[deviceIdKey].offCount = countValue;
-      }
-    });
+    const statsMap = actionsInDay.reduce((acc, row) => {
+      const id = String(row.deviceId);
+      if (!acc[id]) acc[id] = { onCount: 0, offCount: 0 };
+      if (String(row.action).toUpperCase() === "ON") acc[id].onCount++;
+      if (String(row.action).toUpperCase() === "OFF") acc[id].offCount++;
+      return acc;
+    }, {});
 
     const countsByDevice = devices.map((device) => {
-      const key = String(device.id);
-      const onCount = Number(countMap[key]?.onCount || 0);
-      const offCount = Number(countMap[key]?.offCount || 0);
-
+      const stats = statsMap[String(device.id)] || { onCount: 0, offCount: 0 };
       return {
         deviceId: Number(device.id),
         deviceName: device.name,
-        onCount,
-        offCount,
-        total: onCount + offCount,
+        onCount: stats.onCount,
+        offCount: stats.offCount,
+        total: stats.onCount + stats.offCount,
       };
     });
 
     return res.status(200).json({
       success: true,
-      data: {
-        selectedDate,
-        timezone,
-        devices: devices.map((device) => ({
-          id: Number(device.id),
-          name: device.name,
-        })),
-        countsByDevice,
-      },
-      message: "Thống kê bật/tắt theo ngày thành công",
+      data: { selectedDate, timezone, devices, countsByDevice },
+      message: "Thống kê thành công",
     });
   } catch (err) {
     next(err);
   }
 };
 
-module.exports = {
-  searchActions,
-  getDeviceManagementDailyStats,
-};
+module.exports = { searchActions, getDeviceManagementDailyStats };

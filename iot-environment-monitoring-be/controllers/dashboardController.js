@@ -1,6 +1,4 @@
-const Device = require("../models/Device");
-const DataSensor = require("../models/SensorData");
-const Sensor = require("../models/Sensor");
+const { Device, DataSensor, Sensor } = require("../models");
 
 const SENSOR_NAMES = ["temperature", "humidity", "light"];
 
